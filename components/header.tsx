@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Bell, Search, User, LogOut, Settings } from "lucide-react";
 import { Button } from "./ui/button";
@@ -17,6 +17,8 @@ import { Avatar, AvatarFallback } from "./ui/avatar";
 import { Badge } from "./ui/badge";
 import { useAuthStore } from "@/store/auth-store";
 import { useNotificationStore } from "@/store/notification-store";
+import { useInventoryStore } from "@/store/inventory-store";
+import { useTicketStore } from "@/store/ticket-store";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
@@ -29,12 +31,36 @@ export function Header({ title }: HeaderProps) {
   const router = useRouter();
   const { user, logout } = useAuthStore();
   const { notifications, unreadCount, markAsRead } = useNotificationStore();
+  const { items } = useInventoryStore();
+  const { tickets } = useTicketStore();
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
 
   const handleLogout = () => {
     logout();
     router.push("/login");
   };
+
+  const searchResults = useMemo(() => {
+    if (!searchQuery.trim()) return { items: [], tickets: [] };
+    
+    const query = searchQuery.toLowerCase();
+    const matchedItems = items
+      .filter((item: any) => 
+        item.productName.toLowerCase().includes(query) ||
+        item.serialNumber.toLowerCase().includes(query)
+      )
+      .slice(0, 5);
+    
+    const matchedTickets = tickets
+      .filter((ticket: any) =>
+        ticket.id.toLowerCase().includes(query) ||
+        ticket.subject.toLowerCase().includes(query)
+      )
+      .slice(0, 5);
+    
+    return { items: matchedItems, tickets: matchedTickets };
+  }, [searchQuery, items, tickets]);
 
   const userNotifications = notifications
     .filter(n => n.customerId === user?.customerId || n.customerId === null)
@@ -51,11 +77,57 @@ export function Header({ title }: HeaderProps) {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <Input
             type="search"
-            placeholder="Search..."
+            placeholder="Search products, tickets..."
             className="pl-10"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setSearchOpen(true);
+            }}
+            onFocus={() => setSearchOpen(true)}
           />
+          {searchOpen && searchQuery && (searchResults.items.length > 0 || searchResults.tickets.length > 0) && (
+            <div className="absolute top-full mt-2 w-full bg-white border rounded-lg shadow-lg p-2 z-50">
+              {searchResults.items.length > 0 && (
+                <div className="mb-2">
+                  <p className="text-xs font-semibold text-slate-500 px-2 py-1">Products</p>
+                  {searchResults.items.map((item: any) => (
+                    <div
+                      key={item.id}
+                      className="px-3 py-2 hover:bg-slate-50 rounded cursor-pointer"
+                      onClick={() => {
+                        router.push("/inventory");
+                        setSearchQuery("");
+                        setSearchOpen(false);
+                      }}
+                    >
+                      <p className="text-sm font-medium">{item.productName}</p>
+                      <p className="text-xs text-slate-500">{item.serialNumber}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {searchResults.tickets.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-slate-500 px-2 py-1">Tickets</p>
+                  {searchResults.tickets.map((ticket: any) => (
+                    <div
+                      key={ticket.id}
+                      className="px-3 py-2 hover:bg-slate-50 rounded cursor-pointer"
+                      onClick={() => {
+                        router.push(`/tickets/${ticket.id}`);
+                        setSearchQuery("");
+                        setSearchOpen(false);
+                      }}
+                    >
+                      <p className="text-sm font-medium">{ticket.subject}</p>
+                      <p className="text-xs text-slate-500">{ticket.id}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <DropdownMenu>
@@ -138,14 +210,12 @@ export function Header({ title }: HeaderProps) {
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>My Account</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
-              <User className="mr-2 h-4 w-4" />
-              Profile
+            <DropdownMenuItem asChild>
+              <Link href="/profile">My Profile</Link>
             </DropdownMenuItem>
             {user?.role === "distributor" && (
-              <DropdownMenuItem onClick={() => router.push("/settings")}>
-                <Settings className="mr-2 h-4 w-4" />
-                Settings
+              <DropdownMenuItem asChild>
+                <Link href="/settings">Settings</Link>
               </DropdownMenuItem>
             )}
             <DropdownMenuSeparator />

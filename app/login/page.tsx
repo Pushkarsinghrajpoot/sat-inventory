@@ -89,12 +89,25 @@ export default function LoginPage() {
         shake && "animate-shake"
       )}>
         <CardHeader className="space-y-4 text-center">
-          <div className="mx-auto w-16 h-16 bg-gradient-to-br from-blue-600 to-purple-600 rounded-2xl flex items-center justify-center">
-            <Building2 className="h-8 w-8 text-white" />
+          <div className="mx-auto">
+            <img 
+              src="/main-logo.png" 
+              alt="SATMZ" 
+              className="h-16 w-16 object-contain mx-auto"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none';
+                e.currentTarget.nextElementSibling?.classList.remove('hidden');
+              }}
+            />
+            <div className="mx-auto w-16 h-16 bg-gradient-to-br from-blue-600 to-purple-600 rounded-2xl items-center justify-center hidden">
+              <Building2 className="h-8 w-8 text-white" />
+            </div>
           </div>
           <div>
-            <CardTitle className="text-2xl font-bold">Customer Portal</CardTitle>
-            <CardDescription>Sign in to manage your inventory and support</CardDescription>
+            <CardTitle className="text-2xl">SATMZ Inventory Portal</CardTitle>
+            <CardDescription className="mt-2">
+              Sign in to access your inventory and support system
+            </CardDescription>
           </div>
         </CardHeader>
         <CardContent>
@@ -162,9 +175,9 @@ export default function LoginPage() {
           <div className="mt-6 p-4 bg-slate-50 rounded-lg border border-slate-200">
             <p className="text-xs font-semibold text-slate-700 mb-2">Demo Credentials:</p>
             <div className="text-xs space-y-1 text-slate-600">
-              <p><strong>Distributor:</strong> admin@satmz.com / admin123</p>
-              <p><strong>Reseller 1:</strong> reseller1@satmz.com / reseller123</p>
-              <p><strong>Reseller 2:</strong> reseller2@satmz.com / reseller123</p>
+              {/* <p><strong>Distributor:</strong> admin@satmz.com / admin123</p> */}
+              {/* <p><strong>Reseller 1:</strong> reseller1@satmz.com / reseller123</p> */}
+              {/* <p><strong>Reseller 2:</strong> reseller2@satmz.com / reseller123</p> */}
             </div>
           </div>
         </CardContent>

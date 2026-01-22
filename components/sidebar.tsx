@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
 import { usePathname } from "next/navigation";
+import Link from "next/link";
+import { useSidebar } from "@/contexts/sidebar-context";
 import { 
   Home, 
   Package, 
@@ -29,31 +29,55 @@ const menuItems = [
 ];
 
 export function Sidebar() {
-  const [collapsed, setCollapsed] = useState(false);
   const pathname = usePathname();
   const { user } = useAuthStore();
+  const { collapsed, setCollapsed } = useSidebar();
 
   const filteredMenuItems = menuItems.filter(item => 
     item.roles.includes(user?.role || "reseller")
   );
 
   return (
-    <div 
+    <aside
       className={cn(
-        "flex flex-col h-screen bg-slate-900 text-white transition-all duration-300",
-        collapsed ? "w-20" : "w-64"
+        "fixed left-0 top-0 h-screen bg-gradient-to-b from-slate-800 to-slate-900 text-white transition-all duration-300 z-40 flex flex-col shadow-xl",
+        collapsed ? "w-16" : "w-64"
       )}
     >
-      <div className="flex items-center justify-between p-4 border-b border-slate-800">
+      <div className="h-16 flex items-center justify-between px-4 border-b border-slate-700/50">
         {!collapsed && (
-          <div className="flex items-center gap-2">
-            <Building2 className="h-6 w-6 text-blue-500" />
-            <span className="font-bold text-lg">TechSupply</span>
+          <div className="flex items-center gap-3">
+            <img 
+              src="/main-logo.png" 
+              alt="SATMZ" 
+              className="h-10 w-10 object-contain"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none';
+                e.currentTarget.nextElementSibling?.classList.remove('hidden');
+              }}
+            />
+            <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 items-center justify-center hidden">
+              <Building2 className="h-6 w-6" />
+            </div>
+            <div>
+              <h1 className="font-bold text-lg">SATMZ</h1>
+              <p className="text-xs text-slate-300">Inventory Portal</p>
+            </div>
           </div>
+        )}
+        {collapsed && (
+          <img 
+            src="/main-logo.png" 
+            alt="SATMZ" 
+            className="h-8 w-8 object-contain mx-auto"
+            onError={(e) => {
+              e.currentTarget.style.display = 'none';
+            }}
+          />
         )}
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="p-2 hover:bg-slate-800 rounded-lg transition-colors"
+          className="p-2 hover:bg-slate-700/50 rounded-lg transition-colors"
         >
           <ChevronLeft className={cn(
             "h-5 w-5 transition-transform",
@@ -75,8 +99,8 @@ export function Sidebar() {
                 className={cn(
                   "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200",
                   isActive
-                    ? "bg-blue-50 text-blue-700 shadow-sm"
-                    : "text-slate-700 hover:bg-slate-100 hover:shadow-sm"
+                    ? "bg-blue-600 text-white shadow-lg"
+                    : "text-slate-200 hover:bg-slate-700/50 hover:text-white"
                 )}
               >
                 <Icon className={cn("h-5 w-5 transition-transform", isActive && "scale-110")} />
@@ -87,29 +111,30 @@ export function Sidebar() {
         </div>
       </nav>
 
-      <div className="p-4 border-t border-slate-800">
-        <div className={cn(
-          "flex items-center gap-3 px-3 py-2",
-          collapsed && "justify-center"
-        )}>
-          <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shrink-0">
-            <span className="text-sm font-bold">
-              {user?.companyName?.charAt(0) || "U"}
-            </span>
-          </div>
-          {!collapsed && (
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate">{user?.companyName}</p>
-              <Badge 
-                variant={user?.role === "distributor" ? "default" : "secondary"}
-                className="text-xs mt-1"
-              >
-                {user?.role === "distributor" ? "Admin" : "Customer"}
-              </Badge>
+      <div className="p-4 border-t border-slate-700/50">
+        <Link href="/profile">
+          <div className={cn(
+            "flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-700/50 cursor-pointer transition-colors",
+            collapsed && "justify-center"
+          )}>
+            <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shrink-0">
+              <span className="text-sm font-bold">
+                {user?.companyName?.charAt(0) || "U"}
+              </span>
             </div>
-          )}
-        </div>
+            {!collapsed && (
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate text-white">{user?.companyName}</p>
+                <div className="flex items-center gap-2">
+                  <Badge variant={user?.role === "distributor" ? "default" : "secondary"} className="text-xs">
+                    {user?.role === "distributor" ? "Admin" : "Customer"}
+                  </Badge>
+                </div>
+              </div>
+            )}
+          </div>
+        </Link>
       </div>
-    </div>
+    </aside>
   );
 }

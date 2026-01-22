@@ -8,7 +8,7 @@ export const dummyUsers: User[] = [
     id: "USR001",
     email: "admin@satmz.com",
     role: "distributor",
-    companyName: "TechSupply Distribution"
+    companyName: "SATMZ"
   },
   {
     id: "USR002",
