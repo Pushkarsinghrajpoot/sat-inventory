@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +24,7 @@ import { useInventoryStore } from "@/store/inventory-store";
 import { useTicketStore } from "@/store/ticket-store";
 import { useCustomerStore } from "@/store/customer-store";
 import { getWarrantyStatus, isExpiringSoon, isExpired } from "@/lib/date-utils";
+import { downloadReport } from "@/lib/export-utils";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import Link from "next/link";
@@ -30,6 +32,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useState } from "react";
 
 export default function DashboardPage() {
+  const router = useRouter();
   const { user } = useAuthStore();
   const { items } = useInventoryStore();
   const { tickets } = useTicketStore();
@@ -240,7 +243,11 @@ export default function DashboardPage() {
                     <p className="text-sm text-muted-foreground text-center py-4">No items expiring in 31-60 days</p>
                   ) : (
                     expiryAlerts.days60.map(item => (
-                      <div key={item.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-slate-50">
+                      <div 
+                        key={item.id} 
+                        className="flex items-center justify-between p-3 border rounded-lg hover:bg-slate-50 cursor-pointer transition-colors"
+                        onClick={() => router.push("/inventory")}
+                      >
                         <div className="flex-1">
                           <p className="text-sm font-medium">{item.productName}</p>
                           <p className="text-xs text-muted-foreground">{item.serialNumber}</p>
@@ -262,7 +269,11 @@ export default function DashboardPage() {
                     <p className="text-sm text-muted-foreground text-center py-4">No items expiring in 61-90 days</p>
                   ) : (
                     expiryAlerts.days90.map(item => (
-                      <div key={item.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-slate-50">
+                      <div 
+                        key={item.id} 
+                        className="flex items-center justify-between p-3 border rounded-lg hover:bg-slate-50 cursor-pointer transition-colors"
+                        onClick={() => router.push("/inventory")}
+                      >
                         <div className="flex-1">
                           <p className="text-sm font-medium">{item.productName}</p>
                           <p className="text-xs text-muted-foreground">{item.serialNumber}</p>
@@ -284,7 +295,11 @@ export default function DashboardPage() {
                     <p className="text-sm text-muted-foreground text-center py-4">No expired items</p>
                   ) : (
                     expiryAlerts.expired.map(item => (
-                      <div key={item.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-slate-50">
+                      <div 
+                        key={item.id} 
+                        className="flex items-center justify-between p-3 border rounded-lg hover:bg-slate-50 cursor-pointer transition-colors"
+                        onClick={() => router.push("/inventory")}
+                      >
                         <div className="flex-1">
                           <p className="text-sm font-medium">{item.productName}</p>
                           <p className="text-xs text-muted-foreground">{item.serialNumber}</p>
@@ -314,7 +329,11 @@ export default function DashboardPage() {
                   <p className="text-sm text-muted-foreground text-center py-4">No tickets yet</p>
                 ) : (
                   recentTickets.map(ticket => (
-                    <div key={ticket.id} className="flex items-start justify-between p-3 border rounded-lg hover:bg-slate-50">
+                    <div 
+                      key={ticket.id} 
+                      className="flex items-start justify-between p-3 border rounded-lg hover:bg-slate-50 cursor-pointer transition-colors"
+                      onClick={() => router.push(`/tickets/${ticket.id}`)}
+                    >
                       <div className="flex-1">
                         <p className="text-sm font-medium">{ticket.subject}</p>
                         <p className="text-xs text-muted-foreground mt-1">{ticket.id}</p>
@@ -360,7 +379,10 @@ export default function DashboardPage() {
                 <Button 
                   variant="outline" 
                   className="w-full justify-start"
-                  onClick={() => toast.info("Report download feature coming soon!")}
+                  onClick={() => {
+                    downloadReport("Dashboard Report");
+                    toast.success("Dashboard report downloaded successfully");
+                  }}
                 >
                   <Download className="mr-2 h-4 w-4" />
                   Download Reports
@@ -378,7 +400,11 @@ export default function DashboardPage() {
           <CardContent>
             <div className="space-y-4">
               {recentActivity.map((activity, index) => (
-                <div key={index} className="flex items-center gap-4">
+                <div 
+                  key={index} 
+                  className="flex items-center gap-4 p-2 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors"
+                  onClick={() => router.push(activity.type === "delivery" ? "/inventory" : "/tickets")}
+                >
                   <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center">
                     {activity.type === "delivery" ? (
                       <Package className="h-4 w-4 text-blue-600" />

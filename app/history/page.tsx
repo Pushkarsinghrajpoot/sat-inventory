@@ -12,6 +12,7 @@ import { useInventoryStore } from "@/store/inventory-store";
 import { useTicketStore } from "@/store/ticket-store";
 import { useCustomerStore } from "@/store/customer-store";
 import { format, differenceInDays } from "date-fns";
+import { exportDeliveriesToCSV, exportTicketsToCSV, exportRenewalsToCSV, downloadChallan } from "@/lib/export-utils";
 import { toast } from "sonner";
 
 export default function HistoryPage() {
@@ -59,26 +60,31 @@ export default function HistoryPage() {
       .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
   }, [filteredTickets]);
 
-  const handleDownloadChallan = (challanNumber: string) => {
-    toast.promise(
-      new Promise(resolve => setTimeout(resolve, 1500)),
-      {
-        loading: "Downloading challan...",
-        success: `Challan ${challanNumber} downloaded successfully`,
-        error: "Failed to download challan",
-      }
-    );
+  const handleDownloadChallan = async (challanNumber: string, productName: string, serialNumber: string) => {
+    try {
+      await new Promise(resolve => setTimeout(resolve, 800));
+      downloadChallan(challanNumber, productName, serialNumber);
+      toast.success(`Challan ${challanNumber} downloaded successfully`);
+    } catch (error) {
+      toast.error("Failed to download challan");
+    }
   };
 
   const handleExport = (type: string) => {
-    toast.promise(
-      new Promise(resolve => setTimeout(resolve, 1500)),
-      {
-        loading: `Exporting ${type} data...`,
-        success: `${type} data exported successfully`,
-        error: "Failed to export data",
+    try {
+      if (type === "Deliveries") {
+        exportDeliveriesToCSV(deliveredAssets);
+        toast.success(`Exported ${deliveredAssets.length} deliveries to CSV`);
+      } else if (type === "Renewals") {
+        exportRenewalsToCSV(renewalHistory);
+        toast.success(`Exported ${renewalHistory.length} renewals to CSV`);
+      } else if (type === "Ticket History") {
+        exportTicketsToCSV(closedTickets);
+        toast.success(`Exported ${closedTickets.length} tickets to CSV`);
       }
-    );
+    } catch (error) {
+      toast.error("Failed to export data");
+    }
   };
 
   return (
@@ -137,7 +143,7 @@ export default function HistoryPage() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => handleDownloadChallan(item.challanNumber)}
+                        onClick={() => handleDownloadChallan(item.challanNumber, item.productName, item.serialNumber)}
                       >
                         <FileText className="h-4 w-4" />
                       </Button>

@@ -5,7 +5,11 @@ import { DashboardLayout } from "@/components/dashboard-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
 import {
   Select,
   SelectContent,
@@ -17,6 +21,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -33,13 +38,33 @@ import { useAuthStore } from "@/store/auth-store";
 import { useInventoryStore } from "@/store/inventory-store";
 import { useCustomerStore } from "@/store/customer-store";
 import { getWarrantyStatus } from "@/lib/date-utils";
+import { exportInventoryToCSV, downloadChallan, downloadInvoice } from "@/lib/export-utils";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { InventoryItem } from "@/lib/types";
 
+const addItemSchema = z.object({
+  productName: z.string().min(1, "Product name is required"),
+  serialNumber: z.string().min(1, "Serial number is required"),
+  category: z.string().min(1, "Category is required"),
+  quantity: z.number().min(1, "Quantity must be at least 1"),
+  customerId: z.string().min(1, "Customer is required"),
+  deliveryDate: z.string().min(1, "Delivery date is required"),
+  warrantyStartDate: z.string().min(1, "Warranty start date is required"),
+  warrantyEndDate: z.string().min(1, "Warranty end date is required"),
+  invoiceNumber: z.string().min(1, "Invoice number is required"),
+  challanNumber: z.string().min(1, "Challan number is required"),
+  licenseEndDate: z.string().optional(),
+  serviceType: z.string().optional(),
+  serviceStartDate: z.string().optional(),
+  serviceEndDate: z.string().optional(),
+});
+
+type AddItemForm = z.infer<typeof addItemSchema>;
+
 export default function InventoryPage() {
   const { user } = useAuthStore();
-  const { items } = useInventoryStore();
+  const { items, addItem } = useInventoryStore();
   const { customers, getCustomerById } = useCustomerStore();
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
@@ -47,8 +72,25 @@ export default function InventoryPage() {
   const [customerFilter, setCustomerFilter] = useState("all");
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [addItemOpen, setAddItemOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [downloadingChallan, setDownloadingChallan] = useState<string | null>(null);
+  const [downloadingInvoice, setDownloadingInvoice] = useState<string | null>(null);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+    setValue,
+    reset,
+    watch,
+  } = useForm<AddItemForm>({
+    resolver: zodResolver(addItemSchema),
+    defaultValues: {
+      quantity: 1,
+    },
+  });
 
   const categories = useMemo(() => {
     const cats = new Set(items.map(item => item.category));
@@ -108,26 +150,56 @@ export default function InventoryPage() {
     setDetailsOpen(true);
   };
 
-  const handleDownloadChallan = (item: InventoryItem) => {
-    toast.promise(
-      new Promise(resolve => setTimeout(resolve, 1500)),
-      {
-        loading: "Downloading challan...",
-        success: `Challan ${item.challanNumber} downloaded successfully`,
-        error: "Failed to download challan",
-      }
-    );
+  const handleDownloadChallan = async (item: InventoryItem) => {
+    setDownloadingChallan(item.id);
+    try {
+      await new Promise(resolve => setTimeout(resolve, 800));
+      downloadChallan(item.challanNumber, item.productName, item.serialNumber);
+      toast.success(`Challan ${item.challanNumber} downloaded successfully`);
+    } catch (error) {
+      toast.error("Failed to download challan");
+    } finally {
+      setDownloadingChallan(null);
+    }
   };
 
-  const handleDownloadInvoice = (item: InventoryItem) => {
-    toast.promise(
-      new Promise(resolve => setTimeout(resolve, 1500)),
-      {
-        loading: "Downloading invoice...",
-        success: `Invoice ${item.invoiceNumber} downloaded successfully`,
-        error: "Failed to download invoice",
-      }
-    );
+  const handleDownloadInvoice = async (item: InventoryItem) => {
+    setDownloadingInvoice(item.id);
+    try {
+      await new Promise(resolve => setTimeout(resolve, 800));
+      downloadInvoice(item.invoiceNumber, item.productName, item.serialNumber, item.quantity);
+      toast.success(`Invoice ${item.invoiceNumber} downloaded successfully`);
+    } catch (error) {
+      toast.error("Failed to download invoice");
+    } finally {
+      setDownloadingInvoice(null);
+    }
+  };
+
+  const handleAddItem = (data: AddItemForm) => {
+    const newItem: InventoryItem = {
+      id: `INV-${Date.now()}`,
+      productName: data.productName,
+      serialNumber: data.serialNumber,
+      category: data.category,
+      quantity: data.quantity,
+      customerId: data.customerId,
+      deliveryDate: data.deliveryDate,
+      warrantyStartDate: data.warrantyStartDate,
+      warrantyEndDate: data.warrantyEndDate,
+      invoiceNumber: data.invoiceNumber,
+      challanNumber: data.challanNumber,
+      licenseEndDate: data.licenseEndDate || null,
+      serviceType: data.serviceType || null,
+      serviceStartDate: data.serviceStartDate || null,
+      serviceEndDate: data.serviceEndDate || null,
+      status: "delivered",
+    };
+
+    addItem(newItem);
+    toast.success(`${data.productName} added to inventory successfully!`);
+    reset();
+    setAddItemOpen(false);
   };
 
   const getStatusBadge = (warrantyEndDate: string) => {
@@ -163,7 +235,10 @@ export default function InventoryPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => toast.info("Export feature coming soon!")}
+                  onClick={() => {
+                    exportInventoryToCSV(filteredItems);
+                    toast.success(`Exported ${filteredItems.length} items to CSV`);
+                  }}
                 >
                   <Download className="h-4 w-4 mr-2" />
                   Export CSV
@@ -233,7 +308,7 @@ export default function InventoryPage() {
                 Inventory Items ({filteredItems.length})
               </CardTitle>
               {user?.role === "distributor" && (
-                <Button onClick={() => toast.info("Add inventory feature coming soon!")}>
+                <Button onClick={() => setAddItemOpen(true)}>
                   <Plus className="h-4 w-4 mr-2" />
                   Add Item
                 </Button>
@@ -293,15 +368,17 @@ export default function InventoryPage() {
                               variant="ghost"
                               size="sm"
                               onClick={() => handleDownloadChallan(item)}
+                              disabled={downloadingChallan === item.id}
                             >
-                              <FileText className="h-4 w-4" />
+                              <FileText className={downloadingChallan === item.id ? "h-4 w-4 animate-pulse" : "h-4 w-4"} />
                             </Button>
                             <Button
                               variant="ghost"
                               size="sm"
                               onClick={() => handleDownloadInvoice(item)}
+                              disabled={downloadingInvoice === item.id}
                             >
-                              <Download className="h-4 w-4" />
+                              <Download className={downloadingInvoice === item.id ? "h-4 w-4 animate-pulse" : "h-4 w-4"} />
                             </Button>
                           </div>
                         </td>
@@ -466,6 +543,218 @@ export default function InventoryPage() {
                 </div>
               </div>
             )}
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={addItemOpen} onOpenChange={setAddItemOpen}>
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Add New Inventory Item</DialogTitle>
+              <DialogDescription>
+                Fill in the details to add a new item to the inventory
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleSubmit(handleAddItem)}>
+              <div className="grid grid-cols-2 gap-4 py-4">
+                <div className="col-span-2">
+                  <Label htmlFor="productName">Product Name *</Label>
+                  <Input
+                    id="productName"
+                    {...register("productName")}
+                    placeholder="Enter product name"
+                    className="mt-1"
+                  />
+                  {errors.productName && (
+                    <p className="text-xs text-red-500 mt-1">{errors.productName.message}</p>
+                  )}
+                </div>
+
+                <div>
+                  <Label htmlFor="serialNumber">Serial Number *</Label>
+                  <Input
+                    id="serialNumber"
+                    {...register("serialNumber")}
+                    placeholder="SN-XXXX"
+                    className="mt-1"
+                  />
+                  {errors.serialNumber && (
+                    <p className="text-xs text-red-500 mt-1">{errors.serialNumber.message}</p>
+                  )}
+                </div>
+
+                <div>
+                  <Label htmlFor="category">Category *</Label>
+                  <Input
+                    id="category"
+                    {...register("category")}
+                    placeholder="e.g., Laptop, Router, etc."
+                    className="mt-1"
+                  />
+                  {errors.category && (
+                    <p className="text-xs text-red-500 mt-1">{errors.category.message}</p>
+                  )}
+                </div>
+
+                <div>
+                  <Label htmlFor="quantity">Quantity *</Label>
+                  <Input
+                    id="quantity"
+                    type="number"
+                    {...register("quantity", { valueAsNumber: true })}
+                    placeholder="1"
+                    className="mt-1"
+                  />
+                  {errors.quantity && (
+                    <p className="text-xs text-red-500 mt-1">{errors.quantity.message}</p>
+                  )}
+                </div>
+
+                <div>
+                  <Label htmlFor="customerId">Customer *</Label>
+                  <Select onValueChange={(value) => setValue("customerId", value)}>
+                    <SelectTrigger id="customerId" className="mt-1">
+                      <SelectValue placeholder="Select customer" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {customers.map(customer => (
+                        <SelectItem key={customer.id} value={customer.id}>
+                          {customer.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {errors.customerId && (
+                    <p className="text-xs text-red-500 mt-1">{errors.customerId.message}</p>
+                  )}
+                </div>
+
+                <div>
+                  <Label htmlFor="deliveryDate">Delivery Date *</Label>
+                  <Input
+                    id="deliveryDate"
+                    type="date"
+                    {...register("deliveryDate")}
+                    className="mt-1"
+                  />
+                  {errors.deliveryDate && (
+                    <p className="text-xs text-red-500 mt-1">{errors.deliveryDate.message}</p>
+                  )}
+                </div>
+
+                <div>
+                  <Label htmlFor="warrantyStartDate">Warranty Start Date *</Label>
+                  <Input
+                    id="warrantyStartDate"
+                    type="date"
+                    {...register("warrantyStartDate")}
+                    className="mt-1"
+                  />
+                  {errors.warrantyStartDate && (
+                    <p className="text-xs text-red-500 mt-1">{errors.warrantyStartDate.message}</p>
+                  )}
+                </div>
+
+                <div>
+                  <Label htmlFor="warrantyEndDate">Warranty End Date *</Label>
+                  <Input
+                    id="warrantyEndDate"
+                    type="date"
+                    {...register("warrantyEndDate")}
+                    className="mt-1"
+                  />
+                  {errors.warrantyEndDate && (
+                    <p className="text-xs text-red-500 mt-1">{errors.warrantyEndDate.message}</p>
+                  )}
+                </div>
+
+                <div>
+                  <Label htmlFor="licenseEndDate">License End Date (Optional)</Label>
+                  <Input
+                    id="licenseEndDate"
+                    type="date"
+                    {...register("licenseEndDate")}
+                    className="mt-1"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="invoiceNumber">Invoice Number *</Label>
+                  <Input
+                    id="invoiceNumber"
+                    {...register("invoiceNumber")}
+                    placeholder="INV-XXXX"
+                    className="mt-1"
+                  />
+                  {errors.invoiceNumber && (
+                    <p className="text-xs text-red-500 mt-1">{errors.invoiceNumber.message}</p>
+                  )}
+                </div>
+
+                <div>
+                  <Label htmlFor="challanNumber">Challan Number *</Label>
+                  <Input
+                    id="challanNumber"
+                    {...register("challanNumber")}
+                    placeholder="CH-XXXX"
+                    className="mt-1"
+                  />
+                  {errors.challanNumber && (
+                    <p className="text-xs text-red-500 mt-1">{errors.challanNumber.message}</p>
+                  )}
+                </div>
+
+                <div className="col-span-2">
+                  <h4 className="font-semibold text-sm mb-3 mt-2">Service Details (Optional)</h4>
+                </div>
+
+                <div>
+                  <Label htmlFor="serviceType">Service Type</Label>
+                  <Input
+                    id="serviceType"
+                    {...register("serviceType")}
+                    placeholder="e.g., AMC, Extended Support"
+                    className="mt-1"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="serviceStartDate">Service Start Date</Label>
+                  <Input
+                    id="serviceStartDate"
+                    type="date"
+                    {...register("serviceStartDate")}
+                    className="mt-1"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="serviceEndDate">Service End Date</Label>
+                  <Input
+                    id="serviceEndDate"
+                    type="date"
+                    {...register("serviceEndDate")}
+                    className="mt-1"
+                  />
+                </div>
+              </div>
+
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    reset();
+                    setAddItemOpen(false);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Item
+                </Button>
+              </DialogFooter>
+            </form>
           </DialogContent>
         </Dialog>
       </div>
