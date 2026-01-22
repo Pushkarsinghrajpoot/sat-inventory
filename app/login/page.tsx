@@ -172,14 +172,14 @@ export default function LoginPage() {
             </Button>
           </form>
 
-          <div className="mt-6 p-4 bg-slate-50 rounded-lg border border-slate-200">
+          {/* <div className="mt-6 p-4 bg-slate-50 rounded-lg border border-slate-200">
             <p className="text-xs font-semibold text-slate-700 mb-2">Demo Credentials:</p>
             <div className="text-xs space-y-1 text-slate-600">
               {/* <p><strong>Distributor:</strong> admin@satmz.com / admin123</p> */}
               {/* <p><strong>Reseller 1:</strong> reseller1@satmz.com / reseller123</p> */}
               {/* <p><strong>Reseller 2:</strong> reseller2@satmz.com / reseller123</p> */}
-            </div>
-          </div>
+            {/* </div>
+          </div> */} 
         </CardContent>
       </Card>
 
