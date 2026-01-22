@@ -12,11 +12,18 @@ import {
   History, 
   Settings, 
   ChevronLeft,
-  Building2
+  Building2,
+  User
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth-store";
 import { Badge } from "./ui/badge";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "./ui/tooltip";
 
 const menuItems = [
   { name: "Dashboard", icon: Home, href: "/dashboard", roles: ["distributor", "reseller"] },
@@ -40,100 +47,148 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        "fixed left-0 top-0 h-screen bg-gradient-to-b from-slate-800 to-slate-900 text-white transition-all duration-300 z-40 flex flex-col shadow-xl",
-        collapsed ? "w-16" : "w-64"
+        "fixed left-0 top-0 h-screen bg-white border-r border-slate-200 transition-all duration-300 z-40 flex flex-col shadow-lg",
+        collapsed ? "w-20" : "w-64"
       )}
     >
-      <div className="h-16 flex items-center justify-between px-4 border-b border-slate-700/50">
-        {!collapsed && (
-          <div className="flex items-center gap-3">
-            <img 
-              src="/main-logo.png" 
-              alt="SATMZ" 
-              className="h-10 w-10 object-contain"
-              onError={(e) => {
-                e.currentTarget.style.display = 'none';
-                e.currentTarget.nextElementSibling?.classList.remove('hidden');
-              }}
-            />
-            <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 items-center justify-center hidden">
-              <Building2 className="h-6 w-6" />
+      {/* Header */}
+      <div className={cn(
+        "h-16 flex items-center border-b border-slate-200 bg-gradient-to-r from-blue-600 to-blue-700",
+        collapsed ? "justify-center px-2" : "justify-between px-4"
+      )}>
+        {!collapsed ? (
+          <>
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                <img 
+                  src="/main-logo.png" 
+                  alt="SATMZ" 
+                  className="h-7 w-7 object-contain"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                    e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                  }}
+                />
+                <Building2 className="h-6 w-6 text-white hidden" />
+              </div>
+              <div>
+                <h1 className="font-bold text-lg text-white">SATMZ</h1>
+                <p className="text-xs text-blue-100">Inventory Portal</p>
+              </div>
             </div>
-            <div>
-              <h1 className="font-bold text-lg">SATMZ</h1>
-              <p className="text-xs text-slate-300">Inventory Portal</p>
+            <button
+              onClick={() => setCollapsed(!collapsed)}
+              className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+            >
+              <ChevronLeft className="h-5 w-5 text-white" />
+            </button>
+          </>
+        ) : (
+          <button
+            onClick={() => setCollapsed(!collapsed)}
+            className="p-2 hover:bg-white/20 rounded-lg transition-colors group"
+          >
+            <div className="h-8 w-8 rounded-lg bg-white/20 backdrop-blur-sm flex items-center justify-center">
+              <ChevronLeft className="h-5 w-5 text-white rotate-180" />
             </div>
-          </div>
+          </button>
         )}
-        {collapsed && (
-          <img 
-            src="/main-logo.png" 
-            alt="SATMZ" 
-            className="h-8 w-8 object-contain mx-auto"
-            onError={(e) => {
-              e.currentTarget.style.display = 'none';
-            }}
-          />
-        )}
-        <button
-          onClick={() => setCollapsed(!collapsed)}
-          className="p-2 hover:bg-slate-700/50 rounded-lg transition-colors"
-        >
-          <ChevronLeft className={cn(
-            "h-5 w-5 transition-transform",
-            collapsed && "rotate-180"
-          )} />
-        </button>
       </div>
 
-      <nav className="flex-1 px-4 py-6">
-        <div className="space-y-1">
-          {filteredMenuItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = pathname === item.href;
-            
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200",
-                  isActive
-                    ? "bg-blue-600 text-white shadow-lg"
-                    : "text-slate-200 hover:bg-slate-700/50 hover:text-white"
-                )}
-              >
-                <Icon className={cn("h-5 w-5 transition-transform", isActive && "scale-110")} />
-                {!collapsed && <span>{item.name}</span>}
-              </Link>
-            );
-          })}
-        </div>
+      {/* Navigation */}
+      <nav className="flex-1 overflow-y-auto py-6">
+        <TooltipProvider delayDuration={0}>
+          <div className={cn(
+            "space-y-2",
+            collapsed ? "px-2" : "px-3"
+          )}>
+            {filteredMenuItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = pathname === item.href;
+              
+              const menuItem = (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    "flex items-center rounded-xl text-sm font-medium transition-all duration-200 group",
+                    collapsed ? "justify-center p-3" : "gap-3 px-4 py-3",
+                    isActive
+                      ? "bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-md shadow-blue-500/30"
+                      : "text-slate-600 hover:bg-slate-100 hover:text-blue-600"
+                  )}
+                >
+                  <Icon className={cn(
+                    "transition-all duration-200",
+                    collapsed ? "h-6 w-6" : "h-5 w-5",
+                    isActive && "drop-shadow-sm",
+                    !isActive && "group-hover:scale-110"
+                  )} />
+                  {!collapsed && <span className="font-medium">{item.name}</span>}
+                  {isActive && !collapsed && (
+                    <div className="ml-auto h-2 w-2 rounded-full bg-white" />
+                  )}
+                </Link>
+              );
+
+              if (collapsed) {
+                return (
+                  <Tooltip key={item.href}>
+                    <TooltipTrigger asChild>
+                      {menuItem}
+                    </TooltipTrigger>
+                    <TooltipContent side="right" className="font-medium">
+                      {item.name}
+                    </TooltipContent>
+                  </Tooltip>
+                );
+              }
+
+              return menuItem;
+            })}
+          </div>
+        </TooltipProvider>
       </nav>
 
-      <div className="p-4 border-t border-slate-700/50">
-        <Link href="/profile">
-          <div className={cn(
-            "flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-700/50 cursor-pointer transition-colors",
-            collapsed && "justify-center"
-          )}>
-            <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shrink-0">
-              <span className="text-sm font-bold">
-                {user?.companyName?.charAt(0) || "U"}
-              </span>
-            </div>
-            {!collapsed && (
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate text-white">{user?.companyName}</p>
-                <div className="flex items-center gap-2">
-                  <Badge variant={user?.role === "distributor" ? "default" : "secondary"} className="text-xs">
-                    {user?.role === "distributor" ? "Admin" : "Customer"}
-                  </Badge>
+      {/* User Profile */}
+      <div className={cn(
+        "border-t border-slate-200 bg-slate-50",
+        collapsed ? "p-2" : "p-4"
+      )}>
+        <TooltipProvider delayDuration={0}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Link href="/profile">
+                <div className={cn(
+                  "flex items-center rounded-xl hover:bg-white cursor-pointer transition-all duration-200 border border-transparent hover:border-slate-200 hover:shadow-sm",
+                  collapsed ? "justify-center p-3" : "gap-3 px-3 py-3"
+                )}>
+                  <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-600 to-blue-700 flex items-center justify-center shrink-0 shadow-md">
+                    <User className="h-5 w-5 text-white" />
+                  </div>
+                  {!collapsed && (
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold truncate text-slate-900">{user?.companyName}</p>
+                      <p className="text-xs text-slate-500 truncate">
+                        {user?.role === "distributor" ? "Administrator" : "Reseller"}
+                      </p>
+                    </div>
+                  )}
                 </div>
-              </div>
+              </Link>
+            </TooltipTrigger>
+            {collapsed && (
+              <TooltipContent side="right">
+                <div className="text-sm">
+                  <p className="font-medium">{user?.companyName}</p>
+                  <p className="text-xs text-slate-400">
+                    {user?.role === "distributor" ? "Administrator" : "Reseller"}
+                  </p>
+                </div>
+              </TooltipContent>
             )}
-          </div>
-        </Link>
+          </Tooltip>
+        </TooltipProvider>
       </div>
     </aside>
   );

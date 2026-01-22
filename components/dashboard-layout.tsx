@@ -26,7 +26,7 @@ function DashboardLayoutInner({ children, title }: DashboardLayoutProps) {
       <Sidebar />
       <div className={cn(
         "flex-1 flex flex-col overflow-hidden transition-all duration-300",
-        collapsed ? "ml-16" : "ml-64"
+        collapsed ? "ml-20" : "ml-64"
       )}>
         <Header title={title} />
         <main className="flex-1 overflow-y-auto p-6">
