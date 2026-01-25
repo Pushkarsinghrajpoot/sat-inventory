@@ -13,11 +13,13 @@ import {
   Settings, 
   ChevronLeft,
   Building2,
-  User
+  User,
+  FileText
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth-store";
 import { Badge } from "./ui/badge";
+import { ResellerContextSwitcher } from "./reseller-context-switcher";
 import {
   Tooltip,
   TooltipContent,
@@ -26,12 +28,13 @@ import {
 } from "./ui/tooltip";
 
 const menuItems = [
-  { name: "Dashboard", icon: Home, href: "/dashboard", roles: ["distributor", "reseller"] },
-  { name: "Inventory", icon: Package, href: "/inventory", roles: ["distributor", "reseller"] },
-  { name: "Warranty & Services", icon: Shield, href: "/warranty", roles: ["distributor", "reseller"] },
-  { name: "Support Tickets", icon: Headphones, href: "/tickets", roles: ["distributor", "reseller"] },
-  { name: "Notifications", icon: Bell, href: "/notifications", roles: ["distributor", "reseller"] },
-  { name: "History & Audit", icon: History, href: "/history", roles: ["distributor", "reseller"] },
+  { name: "Dashboard", icon: Home, href: "/dashboard", roles: ["distributor", "reseller", "customer"] },
+  { name: "Contracts", icon: FileText, href: "/contracts", roles: ["distributor", "reseller", "customer"] },
+  { name: "Inventory", icon: Package, href: "/inventory", roles: ["distributor", "reseller", "customer"] },
+  { name: "Warranty & Services", icon: Shield, href: "/warranty", roles: ["distributor", "reseller", "customer"] },
+  { name: "Support Tickets", icon: Headphones, href: "/tickets", roles: ["distributor", "reseller", "customer"] },
+  { name: "Notifications", icon: Bell, href: "/notifications", roles: ["distributor", "reseller", "customer"] },
+  { name: "History & Audit", icon: History, href: "/history", roles: ["distributor", "reseller", "customer"] },
   { name: "Settings", icon: Settings, href: "/settings", roles: ["distributor"] },
 ];
 
@@ -94,6 +97,9 @@ export function Sidebar() {
           </button>
         )}
       </div>
+
+      {/* Reseller Context Switcher */}
+      {!collapsed && <ResellerContextSwitcher />}
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto py-6">
@@ -170,7 +176,9 @@ export function Sidebar() {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold truncate text-slate-900">{user?.companyName}</p>
                       <p className="text-xs text-slate-500 truncate">
-                        {user?.role === "distributor" ? "Administrator" : "Reseller"}
+                        {user?.role === "distributor" && "Administrator"}
+                        {user?.role === "reseller" && "Reseller"}
+                        {user?.role === "customer" && "Customer"}
                       </p>
                     </div>
                   )}
@@ -182,7 +190,9 @@ export function Sidebar() {
                 <div className="text-sm">
                   <p className="font-medium">{user?.companyName}</p>
                   <p className="text-xs text-slate-400">
-                    {user?.role === "distributor" ? "Administrator" : "Reseller"}
+                    {user?.role === "distributor" && "Administrator"}
+                    {user?.role === "reseller" && "Reseller"}
+                    {user?.role === "customer" && "Customer"}
                   </p>
                 </div>
               </TooltipContent>

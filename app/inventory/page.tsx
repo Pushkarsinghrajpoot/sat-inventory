@@ -119,6 +119,7 @@ export default function InventoryPage() {
 
     if (statusFilter !== "all") {
       filtered = filtered.filter(item => {
+        if (!item.warrantyEndDate) return false;
         const warrantyStatus = getWarrantyStatus(item.warrantyEndDate);
         if (statusFilter === "active") return warrantyStatus.status === "active";
         if (statusFilter === "expiring") return warrantyStatus.status === "expiring_soon";
@@ -179,21 +180,32 @@ export default function InventoryPage() {
   const handleAddItem = (data: AddItemForm) => {
     const newItem: InventoryItem = {
       id: `INV-${Date.now()}`,
+      contractId: "",
+      contractNumber: "",
+      customerId: data.customerId,
       productName: data.productName,
       serialNumber: data.serialNumber,
-      category: data.category,
       quantity: data.quantity,
-      customerId: data.customerId,
+      unitPrice: 0,
+      totalPrice: 0,
       deliveryDate: data.deliveryDate,
       warrantyStartDate: data.warrantyStartDate,
       warrantyEndDate: data.warrantyEndDate,
-      invoiceNumber: data.invoiceNumber,
-      challanNumber: data.challanNumber,
+      warrantyContractId: null,
       licenseEndDate: data.licenseEndDate || null,
+      licenseContractId: null,
       serviceType: data.serviceType || null,
       serviceStartDate: data.serviceStartDate || null,
       serviceEndDate: data.serviceEndDate || null,
+      serviceContractId: null,
+      category: data.category,
+      manufacturer: "",
+      model: "",
+      invoiceNumber: data.invoiceNumber,
+      challanNumber: data.challanNumber,
+      poNumber: "",
       status: "delivered",
+      notes: "",
     };
 
     addItem(newItem);
@@ -352,9 +364,9 @@ export default function InventoryPage() {
                         <td className="p-3 text-sm text-slate-600">{item.category}</td>
                         <td className="p-3 text-sm text-slate-600">{item.quantity}</td>
                         <td className="p-3 text-sm text-slate-600">
-                          {format(new Date(item.warrantyEndDate), "MMM dd, yyyy")}
+                          {item.warrantyEndDate ? format(new Date(item.warrantyEndDate), "MMM dd, yyyy") : "N/A"}
                         </td>
-                        <td className="p-3">{getStatusBadge(item.warrantyEndDate)}</td>
+                        <td className="p-3">{item.warrantyEndDate ? getStatusBadge(item.warrantyEndDate) : <span className="text-sm text-gray-500">N/A</span>}</td>
                         <td className="p-3">
                           <div className="flex gap-2">
                             <Button
@@ -481,13 +493,13 @@ export default function InventoryPage() {
                   <div>
                     <label className="text-sm font-semibold text-slate-700">Warranty Start</label>
                     <p className="text-sm text-slate-900 mt-1">
-                      {format(new Date(selectedItem.warrantyStartDate), "MMM dd, yyyy")}
+                      {selectedItem.warrantyStartDate ? format(new Date(selectedItem.warrantyStartDate), "MMM dd, yyyy") : "N/A"}
                     </p>
                   </div>
                   <div>
                     <label className="text-sm font-semibold text-slate-700">Warranty End</label>
                     <p className="text-sm text-slate-900 mt-1">
-                      {format(new Date(selectedItem.warrantyEndDate), "MMM dd, yyyy")}
+                      {selectedItem.warrantyEndDate ? format(new Date(selectedItem.warrantyEndDate), "MMM dd, yyyy") : "N/A"}
                     </p>
                   </div>
                   {selectedItem.licenseEndDate && (
@@ -522,7 +534,7 @@ export default function InventoryPage() {
                   </div>
                   <div>
                     <label className="text-sm font-semibold text-slate-700">Status</label>
-                    <div className="mt-1">{getStatusBadge(selectedItem.warrantyEndDate)}</div>
+                    <div className="mt-1">{selectedItem.warrantyEndDate ? getStatusBadge(selectedItem.warrantyEndDate) : <span className="text-sm text-gray-500">N/A</span>}</div>
                   </div>
                 </div>
                 <div className="flex gap-2 pt-4 border-t">

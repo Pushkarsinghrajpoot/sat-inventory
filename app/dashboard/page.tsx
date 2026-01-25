@@ -23,6 +23,9 @@ import { useAuthStore } from "@/store/auth-store";
 import { useInventoryStore } from "@/store/inventory-store";
 import { useTicketStore } from "@/store/ticket-store";
 import { useCustomerStore } from "@/store/customer-store";
+import { useContractStore } from "@/store/contract-store";
+import { useResellerContextStore } from "@/store/reseller-context-store";
+import { filterByAccessibleCustomers } from "@/lib/permissions";
 import { getWarrantyStatus, isExpiringSoon, isExpired } from "@/lib/date-utils";
 import { downloadReport } from "@/lib/export-utils";
 import { format } from "date-fns";
@@ -37,31 +40,39 @@ export default function DashboardPage() {
   const { items } = useInventoryStore();
   const { tickets } = useTicketStore();
   const { customers } = useCustomerStore();
+  const { parentContracts } = useContractStore();
+  const { mode } = useResellerContextStore();
   const [selectedCustomer, setSelectedCustomer] = useState<string>("all");
 
+  const resellerContext = user?.role === "reseller" ? { mode } : undefined;
+
   const filteredItems = useMemo(() => {
-    if (user?.role === "reseller") {
-      return items.filter(item => item.customerId === user.customerId);
-    }
+    const accessible = filterByAccessibleCustomers(items, user, resellerContext);
     if (selectedCustomer === "all") {
-      return items;
+      return accessible;
     }
-    return items.filter(item => item.customerId === selectedCustomer);
-  }, [items, user, selectedCustomer]);
+    return accessible.filter(item => item.customerId === selectedCustomer);
+  }, [items, user, resellerContext, selectedCustomer]);
 
   const filteredTickets = useMemo(() => {
-    if (user?.role === "reseller") {
-      return tickets.filter(ticket => ticket.customerId === user.customerId);
-    }
+    const accessible = filterByAccessibleCustomers(tickets, user, resellerContext);
     if (selectedCustomer === "all") {
-      return tickets;
+      return accessible;
     }
-    return tickets.filter(ticket => ticket.customerId === selectedCustomer);
-  }, [tickets, user, selectedCustomer]);
+    return accessible.filter(ticket => ticket.customerId === selectedCustomer);
+  }, [tickets, user, resellerContext, selectedCustomer]);
+
+  const filteredContracts = useMemo(() => {
+    const accessible = filterByAccessibleCustomers(parentContracts, user, resellerContext);
+    if (selectedCustomer === "all") {
+      return accessible;
+    }
+    return accessible.filter(contract => contract.customerId === selectedCustomer);
+  }, [parentContracts, user, resellerContext, selectedCustomer]);
 
   const stats = useMemo(() => {
     const expiringSoon = filteredItems.filter(item => 
-      isExpiringSoon(item.warrantyEndDate, 90) && !isExpired(item.warrantyEndDate)
+      item.warrantyEndDate && isExpiringSoon(item.warrantyEndDate, 90) && !isExpired(item.warrantyEndDate)
     );
     const openTickets = filteredTickets.filter(t => t.status === "open" || t.status === "in_progress");
     const closedThisMonth = filteredTickets.filter(t => {
@@ -72,29 +83,38 @@ export default function DashboardPage() {
         ticketDate.getFullYear() === now.getFullYear();
     });
 
+    const activeContracts = filteredContracts.filter(c => c.status === "active");
+    const expiringContracts = filteredContracts.filter(c => c.status === "expiring_soon");
+
     return {
       totalProducts: filteredItems.length,
       expiringSoon: expiringSoon.length,
       openTickets: openTickets.length,
       closedTickets: closedThisMonth.length,
+      activeContracts: activeContracts.length,
+      expiringContracts: expiringContracts.length,
+      totalContracts: filteredContracts.length,
     };
   }, [filteredItems, filteredTickets]);
 
   const expiryAlerts = useMemo(() => {
     return {
       days30: filteredItems.filter(item => {
+        if (!item.warrantyEndDate) return false;
         const status = getWarrantyStatus(item.warrantyEndDate);
         return status.daysRemaining > 0 && status.daysRemaining <= 30;
       }),
       days60: filteredItems.filter(item => {
+        if (!item.warrantyEndDate) return false;
         const status = getWarrantyStatus(item.warrantyEndDate);
         return status.daysRemaining > 30 && status.daysRemaining <= 60;
       }),
       days90: filteredItems.filter(item => {
+        if (!item.warrantyEndDate) return false;
         const status = getWarrantyStatus(item.warrantyEndDate);
         return status.daysRemaining > 60 && status.daysRemaining <= 90;
       }),
-      expired: filteredItems.filter(item => isExpired(item.warrantyEndDate)),
+      expired: filteredItems.filter(item => item.warrantyEndDate && isExpired(item.warrantyEndDate)),
     };
   }, [filteredItems]);
 
@@ -150,7 +170,7 @@ export default function DashboardPage() {
           </div>
         )}
 
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Products</CardTitle>
@@ -200,6 +220,17 @@ export default function DashboardPage() {
               </div>
             </CardContent>
           </Card>
+
+          <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => router.push("/contracts")}>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Active Contracts</CardTitle>
+              <FileText className="h-4 w-4 text-purple-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-purple-600">{stats.activeContracts}</div>
+              <p className="text-xs text-muted-foreground mt-1">{stats.expiringContracts} expiring soon</p>
+            </CardContent>
+          </Card>
         </div>
 
         <div className="grid gap-6 md:grid-cols-2">
@@ -228,10 +259,10 @@ export default function DashboardPage() {
                         </div>
                         <div className="text-right">
                           <Badge variant="danger" className="text-xs">
-                            {getWarrantyStatus(item.warrantyEndDate).daysRemaining} days
+                            {item.warrantyEndDate && getWarrantyStatus(item.warrantyEndDate).daysRemaining} days
                           </Badge>
                           <p className="text-xs text-muted-foreground mt-1">
-                            {format(new Date(item.warrantyEndDate), "MMM dd, yyyy")}
+                            {item.warrantyEndDate && format(new Date(item.warrantyEndDate), "MMM dd, yyyy")}
                           </p>
                         </div>
                       </div>
@@ -254,10 +285,10 @@ export default function DashboardPage() {
                         </div>
                         <div className="text-right">
                           <Badge variant="warning" className="text-xs">
-                            {getWarrantyStatus(item.warrantyEndDate).daysRemaining} days
+                            {item.warrantyEndDate && getWarrantyStatus(item.warrantyEndDate).daysRemaining} days
                           </Badge>
                           <p className="text-xs text-muted-foreground mt-1">
-                            {format(new Date(item.warrantyEndDate), "MMM dd, yyyy")}
+                            {item.warrantyEndDate && format(new Date(item.warrantyEndDate), "MMM dd, yyyy")}
                           </p>
                         </div>
                       </div>
@@ -280,10 +311,10 @@ export default function DashboardPage() {
                         </div>
                         <div className="text-right">
                           <Badge variant="warning" className="text-xs">
-                            {getWarrantyStatus(item.warrantyEndDate).daysRemaining} days
+                            {item.warrantyEndDate && getWarrantyStatus(item.warrantyEndDate).daysRemaining} days
                           </Badge>
                           <p className="text-xs text-muted-foreground mt-1">
-                            {format(new Date(item.warrantyEndDate), "MMM dd, yyyy")}
+                            {item.warrantyEndDate && format(new Date(item.warrantyEndDate), "MMM dd, yyyy")}
                           </p>
                         </div>
                       </div>
@@ -307,7 +338,7 @@ export default function DashboardPage() {
                         <div className="text-right">
                           <Badge variant="danger" className="text-xs">Expired</Badge>
                           <p className="text-xs text-muted-foreground mt-1">
-                            {format(new Date(item.warrantyEndDate), "MMM dd, yyyy")}
+                            {item.warrantyEndDate && format(new Date(item.warrantyEndDate), "MMM dd, yyyy")}
                           </p>
                         </div>
                       </div>
@@ -368,6 +399,12 @@ export default function DashboardPage() {
                   <Button className="w-full justify-start">
                     <Ticket className="mr-2 h-4 w-4" />
                     Raise New Ticket
+                  </Button>
+                </Link>
+                <Link href="/contracts">
+                  <Button variant="outline" className="w-full justify-start">
+                    <FileText className="mr-2 h-4 w-4" />
+                    View Contracts
                   </Button>
                 </Link>
                 <Link href="/inventory">

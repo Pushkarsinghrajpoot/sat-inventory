@@ -48,7 +48,7 @@ export default function NewTicketPage() {
   }, [userProducts, selectedProductId]);
 
   const warrantyInfo = useMemo(() => {
-    if (!selectedProduct) return null;
+    if (!selectedProduct || !selectedProduct.warrantyEndDate) return null;
     const status = getWarrantyStatus(selectedProduct.warrantyEndDate);
     const serviceStatus = selectedProduct.serviceType ? "covered" : "not_covered";
     return { status, serviceStatus };
@@ -62,6 +62,8 @@ export default function NewTicketPage() {
 
     const newTicket = createTicket({
       customerId: user?.customerId || selectedProduct.customerId,
+      contractId: selectedProduct.contractId || "",
+      contractNumber: selectedProduct.contractNumber || "",
       serialNumber: selectedProduct.serialNumber,
       productName: selectedProduct.productName,
       category,
@@ -70,8 +72,11 @@ export default function NewTicketPage() {
       description,
       status: "open",
       warrantyStatus: warrantyInfo?.status.status === "active" ? "active" : 
-                      warrantyInfo?.status.status === "expiring_soon" ? "expiring" : "expired",
+                      warrantyInfo?.status.status === "expiring_soon" ? "expiring_soon" : "expired",
       serviceStatus: (warrantyInfo?.serviceStatus || "not_covered") as "covered" | "not_covered",
+      coverageDetails: `Warranty: ${warrantyInfo?.status.status || "N/A"}, Service: ${warrantyInfo?.serviceStatus || "not_covered"}`,
+      resolvedAt: null,
+      assignedTo: null,
     });
 
     toast.success(`Ticket ${newTicket.id} created successfully`);

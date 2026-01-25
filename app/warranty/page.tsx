@@ -54,14 +54,17 @@ export default function WarrantyPage() {
 
   const stats = useMemo(() => {
     const active = filteredItems.filter(item => {
+      if (!item.warrantyEndDate) return false;
       const status = getWarrantyStatus(item.warrantyEndDate);
       return status.status === "active";
     });
     const expiring30 = filteredItems.filter(item => {
+      if (!item.warrantyEndDate) return false;
       const days = daysUntilExpiry(item.warrantyEndDate);
       return days > 0 && days <= 30;
     });
     const expired = filteredItems.filter(item => {
+      if (!item.warrantyEndDate) return false;
       const status = getWarrantyStatus(item.warrantyEndDate);
       return status.status === "expired";
     });
@@ -77,7 +80,7 @@ export default function WarrantyPage() {
 
   const handleEditWarranty = (item: InventoryItem) => {
     setSelectedItem(item);
-    setWarrantyEndDate(item.warrantyEndDate);
+    setWarrantyEndDate(item.warrantyEndDate || "");
     setEditDialogOpen(true);
   };
 
@@ -113,6 +116,7 @@ export default function WarrantyPage() {
   };
 
   const handleRenewWarranty = (item: InventoryItem) => {
+    if (!item.warrantyEndDate) return;
     const newEndDate = format(addYears(new Date(item.warrantyEndDate), 1), "yyyy-MM-dd");
     updateItem(item.id, { warrantyEndDate: newEndDate });
     toast.success(`Warranty renewed until ${format(new Date(newEndDate), "MMM dd, yyyy")}`);
@@ -218,12 +222,12 @@ export default function WarrantyPage() {
                           </td>
                         )}
                         <td className="p-3 text-sm text-slate-600">
-                          {format(new Date(item.warrantyStartDate), "MMM dd, yyyy")}
+                          {item.warrantyStartDate ? format(new Date(item.warrantyStartDate), "MMM dd, yyyy") : "N/A"}
                         </td>
                         <td className="p-3 text-sm text-slate-600">
-                          {format(new Date(item.warrantyEndDate), "MMM dd, yyyy")}
+                          {item.warrantyEndDate ? format(new Date(item.warrantyEndDate), "MMM dd, yyyy") : "N/A"}
                         </td>
-                        <td className="p-3">{getWarrantyBadge(item.warrantyEndDate)}</td>
+                        <td className="p-3">{item.warrantyEndDate ? getWarrantyBadge(item.warrantyEndDate) : <span className="text-sm text-gray-500">N/A</span>}</td>
                         <td className="p-3 text-sm text-slate-600">
                           {item.serviceType || <span className="text-slate-400">None</span>}
                         </td>
