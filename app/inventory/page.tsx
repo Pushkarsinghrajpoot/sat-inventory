@@ -39,6 +39,8 @@ import { useAuthStore } from "@/store/auth-store";
 import { useInventoryStore } from "@/store/inventory-store";
 import { useCustomerStore } from "@/store/customer-store";
 import { useContractStore } from "@/store/contract-store";
+import { useResellerContextStore } from "@/store/reseller-context-store";
+import { hasPermission } from "@/lib/permissions";
 import { useRouter } from "next/navigation";
 import {
   Tooltip,
@@ -74,6 +76,7 @@ type AddItemForm = z.infer<typeof addItemSchema>;
 export default function InventoryPage() {
   const router = useRouter();
   const { user } = useAuthStore();
+  const { mode } = useResellerContextStore();
   const { items, addItem, updateItem } = useInventoryStore();
   const { customers, getCustomerById } = useCustomerStore();
   const { getContractById, parentContracts } = useContractStore();
@@ -88,6 +91,9 @@ export default function InventoryPage() {
   const [downloadingChallan, setDownloadingChallan] = useState<string | null>(null);
   const [downloadingInvoice, setDownloadingInvoice] = useState<string | null>(null);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  const resellerContext = user?.role === "reseller" ? { mode } : undefined;
+  const canCreateProduct = hasPermission(user?.role || "customer", "inventory.create", resellerContext);
 
   // Get all contracts that contain a specific product (many-to-many relationship)
   const getProductContracts = (productId: string) => {
@@ -335,10 +341,12 @@ export default function InventoryPage() {
               <CardTitle>
                 Inventory Items ({filteredItems.length})
               </CardTitle>
-              <Button onClick={() => router.push("/inventory/new")}>
-                <Plus className="h-4 w-4 mr-2" />
-                Create Product
-              </Button>
+              {canCreateProduct && (
+                <Button onClick={() => router.push("/inventory/new")}>
+                  <Plus className="h-4 h-4 mr-2" />
+                  Create Product
+                </Button>
+              )}
             </div>
           </CardHeader>
           <CardContent>
