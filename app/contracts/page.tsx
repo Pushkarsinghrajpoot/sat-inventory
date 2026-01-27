@@ -18,15 +18,19 @@ export default function ContractsPage() {
 
   const resellerContext = user?.role === "reseller" ? { mode } : undefined;
 
+  // Ensure arrays are defined
+  const safeParentContracts = Array.isArray(parentContracts) ? parentContracts : [];
+  const safeChildContracts = Array.isArray(childContracts) ? childContracts : [];
+
   const accessibleParentContracts = filterByAccessibleCustomers(
-    parentContracts,
+    safeParentContracts,
     user,
     resellerContext
   );
 
   // Filter child contracts based on accessible parent contracts
-  const accessibleChildContracts = childContracts.filter(child => {
-    const parentContract = parentContracts.find(p => p.id === child.parentContractId);
+  const accessibleChildContracts = safeChildContracts.filter(child => {
+    const parentContract = safeParentContracts.find(p => p.id === child.parentContractId);
     return parentContract && accessibleParentContracts.some(ap => ap.id === parentContract.id);
   });
 
@@ -41,9 +45,9 @@ export default function ContractsPage() {
 
   const stats = {
     total: allAccessibleContracts.length,
-    active: allAccessibleContracts.filter((c: any) => c.status === "active").length,
-    expiringSoon: allAccessibleContracts.filter((c: any) => c.status === "expiring_soon").length,
-    expired: allAccessibleContracts.filter((c: any) => c.status === "expired").length
+    active: allAccessibleContracts.filter((c: any) => c?.status === "active").length,
+    expiringSoon: allAccessibleContracts.filter((c: any) => c?.status === "expiring_soon").length,
+    expired: allAccessibleContracts.filter((c: any) => c?.status === "expired").length
   };
 
   return (

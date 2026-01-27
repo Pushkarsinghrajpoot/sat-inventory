@@ -21,8 +21,23 @@ export function ContractCard({ contract, onViewDetails, showActions = true }: Co
   
   // Check if this is a child contract
   const isChildContract = 'parentContractId' in contract;
-  const childContracts = isChildContract ? [] : getChildContractsByParentId(contract.id);
-  const parentContract = isChildContract ? getContractById(contract.parentContractId) : null;
+  const childContracts = isChildContract ? [] : (() => {
+    try {
+      const contracts = getChildContractsByParentId(contract.id);
+      return Array.isArray(contracts) ? contracts : [];
+    } catch (e) {
+      console.error('Error fetching child contracts:', e);
+      return [];
+    }
+  })();
+  const parentContract = isChildContract ? (() => {
+    try {
+      return getContractById(contract.parentContractId);
+    } catch (e) {
+      console.error('Error fetching parent contract:', e);
+      return null;
+    }
+  })() : null;
 
   const daysRemaining = differenceInDays(new Date(contract.endDate), new Date());
 
@@ -63,7 +78,7 @@ export function ContractCard({ contract, onViewDetails, showActions = true }: Co
             <Package className="w-4 h-4 text-gray-400" />
             <div>
               <p className="text-xs text-gray-500">Products</p>
-              <p className="font-semibold">{contract.productIds.length}</p>
+              <p className="font-semibold">{(contract.productIds || []).length}</p>
             </div>
           </div>
         </div>

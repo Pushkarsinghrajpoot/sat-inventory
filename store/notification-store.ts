@@ -16,8 +16,8 @@ interface NotificationState {
 export const useNotificationStore = create<NotificationState>()(
   persist(
     (set, get) => ({
-      notifications: dummyNotifications,
-      unreadCount: dummyNotifications.filter(n => !n.isRead).length,
+      notifications: dummyNotifications || [],
+      unreadCount: (dummyNotifications || []).filter(n => !n.isRead).length,
       
       markAsRead: (id) => {
         set((state) => ({
@@ -38,7 +38,7 @@ export const useNotificationStore = create<NotificationState>()(
       addNotification: (notification) => {
         const newNotification: Notification = {
           ...notification,
-          id: `NOT${String(get().notifications.length + 1).padStart(3, "0")}`,
+          id: `NOT${String((get().notifications || []).length + 1).padStart(3, "0")}`,
           createdAt: new Date().toISOString()
         };
         
@@ -49,14 +49,14 @@ export const useNotificationStore = create<NotificationState>()(
       },
       
       getNotificationsByCustomer: (customerId) => {
-        return get().notifications.filter(
+        return (get().notifications || []).filter(
           (notif) => notif.customerId === customerId || notif.customerId === null
         );
       },
       
       updateUnreadCount: () => {
         set((state) => ({
-          unreadCount: state.notifications.filter(n => !n.isRead).length
+          unreadCount: (state.notifications || []).filter(n => !n.isRead).length
         }));
       }
     }),

@@ -16,12 +16,12 @@ interface TicketState {
 export const useTicketStore = create<TicketState>()(
   persist(
     (set, get) => ({
-      tickets: dummyTickets,
+      tickets: dummyTickets || [],
       
       createTicket: (ticket) => {
         const newTicket: Ticket = {
           ...ticket,
-          id: `TKT${String(get().tickets.length + 1).padStart(3, "0")}`,
+          id: `TKT${String((get().tickets || []).length + 1).padStart(3, "0")}`,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
           timeline: [
@@ -105,11 +105,11 @@ export const useTicketStore = create<TicketState>()(
       },
       
       getTicketsByCustomer: (customerId) => {
-        return get().tickets.filter((ticket) => ticket.customerId === customerId);
+        return (get().tickets || []).filter((ticket) => ticket.customerId === customerId);
       },
       
       getTicketById: (id) => {
-        return get().tickets.find((ticket) => ticket.id === id);
+        return (get().tickets || []).find((ticket) => ticket.id === id);
       }
     }),
     {

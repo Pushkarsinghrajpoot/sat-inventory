@@ -52,45 +52,51 @@ export function Header({ title }: HeaderProps) {
     const query = searchQuery.toLowerCase();
     const resellerContext = user?.role === "reseller" ? { mode } : undefined;
     
+    // Ensure arrays are defined
+    const safeItems = Array.isArray(items) ? items : [];
+    const safeTickets = Array.isArray(tickets) ? tickets : [];
+    const safeParentContracts = Array.isArray(parentContracts) ? parentContracts : [];
+    const safeChildContracts = Array.isArray(childContracts) ? childContracts : [];
+    
     // Filter contracts based on permissions
     const accessibleParentContracts = filterByAccessibleCustomers(
-      parentContracts,
+      safeParentContracts,
       user,
       resellerContext
     );
     
-    const accessibleChildContracts = childContracts.filter(child => {
-      const parentContract = parentContracts.find(p => p.id === child.parentContractId);
+    const accessibleChildContracts = safeChildContracts.filter(child => {
+      const parentContract = safeParentContracts.find(p => p.id === child.parentContractId);
       return parentContract && accessibleParentContracts.some(ap => ap.id === parentContract.id);
     });
     
     const allContracts = [...accessibleParentContracts, ...accessibleChildContracts];
     
-    const matchedItems = items
+    const matchedItems = safeItems
       .filter((item: any) => 
-        item.productName.toLowerCase().includes(query) ||
-        item.serialNumber.toLowerCase().includes(query)
+        (item.productName || '').toLowerCase().includes(query) ||
+        (item.serialNumber || '').toLowerCase().includes(query)
       )
       .slice(0, 5);
     
-    const matchedTickets = tickets
+    const matchedTickets = safeTickets
       .filter((ticket: any) =>
-        ticket.id.toLowerCase().includes(query) ||
-        ticket.subject.toLowerCase().includes(query)
+        (ticket.id || '').toLowerCase().includes(query) ||
+        (ticket.subject || '').toLowerCase().includes(query)
       )
       .slice(0, 5);
     
     const matchedContracts = allContracts
       .filter((contract: any) => 
-        contract.contractNumber.toLowerCase().includes(query) ||
-        contract.title.toLowerCase().includes(query)
+        (contract.contractNumber || '').toLowerCase().includes(query) ||
+        (contract.title || '').toLowerCase().includes(query)
       )
       .slice(0, 3);
     
     return { items: matchedItems, tickets: matchedTickets, contracts: matchedContracts };
   }, [searchQuery, items, tickets, parentContracts, childContracts, user, mode]);
 
-  const userNotifications = notifications
+  const userNotifications = (Array.isArray(notifications) ? notifications : [])
     .filter(n => n.customerId === user?.customerId || n.customerId === null)
     .slice(0, 5);
 

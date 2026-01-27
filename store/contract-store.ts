@@ -77,8 +77,8 @@ export const useContractStore = create<ContractState>()(
       getContractCoverage: (serialNumber) => {
         const { parentContracts, childContracts } = get();
         
-        const coveringChildContracts = childContracts.filter(cc => 
-          cc.coveredSerialNumbers.includes(serialNumber) && cc.status === "active"
+        const coveringChildContracts = (childContracts || []).filter(cc => 
+          (cc.coveredSerialNumbers || []).includes(serialNumber) && cc.status === "active"
         );
         
         if (coveringChildContracts.length === 0) {
@@ -90,8 +90,8 @@ export const useContractStore = create<ContractState>()(
           };
         }
         
-        const parentContract = parentContracts.find(pc => 
-          pc.id === coveringChildContracts[0].parentContractId
+        const parentContract = (parentContracts || []).find(pc => 
+          pc.id === coveringChildContracts[0]?.parentContractId
         );
         
         const primaryCoverage = coveringChildContracts[0];

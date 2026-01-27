@@ -18,11 +18,15 @@ export function ContractList({ contracts, onViewDetails, showActions = true }: C
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
   const filteredContracts = useMemo(() => {
+    if (!Array.isArray(contracts)) return [];
+    
     return contracts.filter((contract: any) => {
+      if (!contract) return false;
+      
       const customerName = contract.customerName || `Customer ID: ${contract.customerId}`;
       const matchesSearch = 
-        contract.contractNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        contract.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (contract.contractNumber || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (contract.title || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         customerName.toLowerCase().includes(searchTerm.toLowerCase());
 
       const matchesStatus = statusFilter === "all" || contract.status === statusFilter;
@@ -80,7 +84,7 @@ export function ContractList({ contracts, onViewDetails, showActions = true }: C
       )}
 
       <div className="text-sm text-gray-600">
-        Showing {filteredContracts.length} of {contracts.length} contracts
+        Showing {filteredContracts.length} of {Array.isArray(contracts) ? contracts.length : 0} contracts
       </div>
     </div>
   );
