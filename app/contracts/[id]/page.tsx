@@ -407,7 +407,7 @@ function ContractDetailPageContent({ params }: { params: Promise<{ id: string }>
     if (!canEdit) return;
     
     // Remove product from contract
-    const updatedProductIds = safeContract.productIds.filter(id => id !== productId);
+    const updatedProductIds = safeContract.productIds.filter((id: string) => id !== productId);
     if (isChildContract) {
       contractStore.updateChildContract(contract.id, { productIds: updatedProductIds });
     } else {
