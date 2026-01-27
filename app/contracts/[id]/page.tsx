@@ -24,15 +24,26 @@ import ErrorBoundary from "@/components/error-boundary";
 
 function ContractDetailPageContent({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
+  const { id } = use(params);
+  
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  const { id } = use(params);
+  // Store hooks
   const { user } = useAuthStore();
   const { mode } = useResellerContextStore();
-  const { getContractById, getChildContractsByParentId, updateParentContract, getChildContractById, updateChildContract } = useContractStore();
-  const { items, updateItem } = useInventoryStore();
+  const contractStore = useContractStore();
+  const inventoryStore = useInventoryStore();
   
+  // State for contract data
+  const [contract, setContract] = useState<any>(null);
+  const [parentContract, setParentContract] = useState<any>(null);
+  const [childContract, setChildContract] = useState<any>(null);
+  const [isChildContract, setIsChildContract] = useState(false);
+  const [childContracts, setChildContracts] = useState<any[]>([]);
+  const [contractProducts, setContractProducts] = useState<any[]>([]);
+  
+  // Dialog states
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [addProductDialogOpen, setAddProductDialogOpen] = useState(false);
   const [createChildDialogOpen, setCreateChildDialogOpen] = useState(false);
@@ -53,11 +64,6 @@ function ContractDetailPageContent({ params }: { params: Promise<{ id: string }>
     location: "",
     status: "active"
   });
-
-  // Handle loading state
-  useEffect(() => {
-    setIsLoading(false);
-  }, []);
   
   const [editForm, setEditForm] = useState({
     title: "",
@@ -80,6 +86,96 @@ function ContractDetailPageContent({ params }: { params: Promise<{ id: string }>
     coveredSerialNumbers: [] as string[]
   });
 
+  // Load contract data on mount
+  useEffect(() => {
+    const loadContractData = () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+
+        // Try to get parent contract first
+        let foundParentContract = null;
+        let foundChildContract = null;
+        let foundContract = null;
+
+        try {
+          foundParentContract = contractStore.getContractById(id);
+          if (foundParentContract) {
+            foundContract = foundParentContract;
+            setIsChildContract(false);
+          }
+        } catch (e) {
+          console.error('Error fetching parent contract:', e);
+        }
+
+        // If not found as parent, try as child
+        if (!foundContract) {
+          try {
+            foundChildContract = contractStore.getChildContractById(id);
+            if (foundChildContract) {
+              foundContract = foundChildContract;
+              setIsChildContract(true);
+              
+              // Get parent contract for child
+              try {
+                const parent = contractStore.getContractById(foundChildContract.parentContractId);
+                setParentContract(parent);
+              } catch (e) {
+                console.error('Error fetching parent for child contract:', e);
+              }
+            }
+          } catch (e) {
+            console.error('Error fetching child contract:', e);
+          }
+        }
+
+        if (!foundContract) {
+          setError("Contract not found");
+          setIsLoading(false);
+          return;
+        }
+
+        // Validate contract has required properties
+        if (!foundContract?.id || !foundContract?.contractNumber || !foundContract?.endDate) {
+          setError("Invalid contract data");
+          setIsLoading(false);
+          return;
+        }
+
+        setContract(foundContract);
+        setParentContract(foundParentContract);
+        setChildContract(foundChildContract);
+
+        // Load child contracts if this is a parent contract
+        if (!foundChildContract && foundParentContract) {
+          try {
+            const children = contractStore.getChildContractsByParentId(foundContract.id);
+            setChildContracts(Array.isArray(children) ? children : []);
+          } catch (e) {
+            console.error('Error fetching child contracts:', e);
+            setChildContracts([]);
+          }
+        } else {
+          setChildContracts([]);
+        }
+
+        // Load contract products
+        const productIds = Array.isArray(foundContract.productIds) ? foundContract.productIds : [];
+        const items = inventoryStore.items || [];
+        const products = items.filter(item => productIds.includes(item.id));
+        setContractProducts(products);
+
+        setIsLoading(false);
+      } catch (err) {
+        console.error('Error loading contract:', err);
+        setError(err instanceof Error ? err.message : "Failed to load contract");
+        setIsLoading(false);
+      }
+    };
+
+    loadContractData();
+  }, [id, contractStore, inventoryStore]);
+
   // Show loading state
   if (isLoading) {
     return (
@@ -94,12 +190,12 @@ function ContractDetailPageContent({ params }: { params: Promise<{ id: string }>
   }
 
   // Show error state
-  if (error) {
+  if (error || !contract) {
     return (
       <DashboardLayout title="Contract Details">
         <div className="flex items-center justify-center min-h-[400px]">
           <div className="text-center">
-            <p className="text-red-500 text-lg">Error: {error}</p>
+            <p className="text-red-500 text-lg">Error: {error || "Contract not found"}</p>
             <Button onClick={() => router.push("/contracts")} className="mt-4">
               Back to Contracts
             </Button>
@@ -109,60 +205,9 @@ function ContractDetailPageContent({ params }: { params: Promise<{ id: string }>
     );
   }
 
-  // Get contracts with additional safety checks
-  let parentContract = null;
-  let childContract = null;
-  
-  try {
-    parentContract = getContractById(id);
-  } catch (e) {
-    console.error('Error fetching parent contract:', e);
-  }
-  
-  try {
-    childContract = getChildContractById(id);
-  } catch (e) {
-    console.error('Error fetching child contract:', e);
-  }
-  
-  const contract = parentContract || childContract;
-  const isChildContract = !!childContract;
-  
+  // Calculate derived values
   const resellerContext = user?.role === "reseller" ? { mode } : undefined;
   const canEdit = hasPermission(user?.role || "customer", "contracts.edit", resellerContext);
-
-  if (!contract) {
-    return (
-      <DashboardLayout title="Contract Details">
-        <div className="flex items-center justify-center min-h-[400px]">
-          <div className="text-center">
-            <p className="text-gray-500 text-lg">Contract not found</p>
-            <Button onClick={() => router.push("/contracts")} className="mt-4">
-              Back to Contracts
-            </Button>
-          </div>
-        </div>
-      </DashboardLayout>
-    );
-  }
-
-  // Additional validation for required contract properties
-  if (!contract?.id || !contract?.contractNumber || !contract?.endDate) {
-    return (
-      <DashboardLayout title="Contract Details">
-        <div className="flex items-center justify-center min-h-[400px]">
-          <div className="text-center">
-            <p className="text-gray-500 text-lg">Invalid contract data</p>
-            <Button onClick={() => router.push("/contracts")} className="mt-4">
-              Back to Contracts
-            </Button>
-          </div>
-        </div>
-      </DashboardLayout>
-    );
-  }
-
-  // Defensive check for contract properties
   const daysRemaining = differenceInDays(new Date(contract.endDate), new Date());
   
   // Ensure contract has required properties with defaults
@@ -173,20 +218,6 @@ function ContractDetailPageContent({ params }: { params: Promise<{ id: string }>
     autoRenew: contract.autoRenew || false,
     renewalReminderDays: contract.renewalReminderDays || 30
   };
-  
-  // Get contract products with defensive checks
-  const contractProducts = Array.isArray(items) ? items.filter(item => safeContract.productIds.includes(item.id)) : [];
-  
-  // Get child contracts (only for parent contracts) with defensive checks
-  const childContracts = isChildContract ? [] : (() => {
-    try {
-      const contracts = getChildContractsByParentId(contract.id);
-      return Array.isArray(contracts) ? contracts : [];
-    } catch (e) {
-      console.error('Error fetching child contracts:', e);
-      return [];
-    }
-  })();
 
   const handleEditContract = () => {
     setEditForm({
@@ -202,7 +233,7 @@ function ContractDetailPageContent({ params }: { params: Promise<{ id: string }>
 
   const handleSaveEdit = () => {
     if (isChildContract) {
-      updateChildContract(contract.id, {
+      contractStore.updateChildContract(contract.id, {
         title: editForm.title,
         description: editForm.description,
         value: parseFloat(editForm.totalValue),
@@ -211,7 +242,7 @@ function ContractDetailPageContent({ params }: { params: Promise<{ id: string }>
         renewalReminderDays: parseInt(editForm.renewalReminderDays)
       });
     } else {
-      updateParentContract(contract.id, {
+      contractStore.updateParentContract(contract.id, {
         title: editForm.title,
         description: editForm.description,
         totalValue: parseFloat(editForm.totalValue),
@@ -220,6 +251,13 @@ function ContractDetailPageContent({ params }: { params: Promise<{ id: string }>
         renewalReminderDays: parseInt(editForm.renewalReminderDays)
       });
     }
+    
+    // Reload contract data
+    const updatedContract = isChildContract 
+      ? contractStore.getChildContractById(contract.id)
+      : contractStore.getContractById(contract.id);
+    setContract(updatedContract);
+    
     toast.success("Contract updated successfully");
     setEditDialogOpen(false);
   };
@@ -227,16 +265,23 @@ function ContractDetailPageContent({ params }: { params: Promise<{ id: string }>
   const handleRenewContract = () => {
     const newEndDate = format(addYears(new Date(contract.endDate), 1), "yyyy-MM-dd");
     if (isChildContract) {
-      updateChildContract(contract.id, {
+      contractStore.updateChildContract(contract.id, {
         endDate: newEndDate,
         status: "active" as const
       });
     } else {
-      updateParentContract(contract.id, {
+      contractStore.updateParentContract(contract.id, {
         endDate: newEndDate,
         status: "active" as const
       });
     }
+    
+    // Reload contract data
+    const updatedContract = isChildContract 
+      ? contractStore.getChildContractById(contract.id)
+      : contractStore.getContractById(contract.id);
+    setContract(updatedContract);
+    
     toast.success(`Contract renewed until ${format(new Date(newEndDate), "MMM d, yyyy")}`);
     setRenewDialogOpen(false);
   };
@@ -251,27 +296,36 @@ function ContractDetailPageContent({ params }: { params: Promise<{ id: string }>
       return;
     }
 
-    const { updateItem } = useInventoryStore.getState();
-    
     // Update contract productIds
     const updatedProductIds = [...new Set([...safeContract.productIds, ...selectedProductIds])];
     if (isChildContract) {
-      updateChildContract(contract.id, {
+      contractStore.updateChildContract(contract.id, {
         productIds: updatedProductIds
       });
     } else {
-      updateParentContract(contract.id, {
+      contractStore.updateParentContract(contract.id, {
         productIds: updatedProductIds
       });
     }
 
     // Update inventory items with contract info
     selectedProductIds.forEach(productId => {
-      updateItem(productId, {
+      inventoryStore.updateItem(productId, {
         contractId: contract.id,
         contractNumber: contract.contractNumber
       });
     });
+
+    // Reload products
+    const items = inventoryStore.items || [];
+    const products = items.filter(item => updatedProductIds.includes(item.id));
+    setContractProducts(products);
+    
+    // Reload contract
+    const updatedContract = isChildContract 
+      ? contractStore.getChildContractById(contract.id)
+      : contractStore.getContractById(contract.id);
+    setContract(updatedContract);
 
     toast.success(`${selectedProductIds.length} product(s) added to contract`);
     setSelectedProductIds([]);
@@ -292,7 +346,6 @@ function ContractDetailPageContent({ params }: { params: Promise<{ id: string }>
       return;
     }
 
-    const { addItem } = useInventoryStore.getState();
     const unitPrice = parseFloat(newProductForm.unitPrice);
     const quantity = parseInt(newProductForm.quantity) || 1;
     
@@ -326,7 +379,7 @@ function ContractDetailPageContent({ params }: { params: Promise<{ id: string }>
       notes: ""
     };
 
-    addItem(newProduct);
+    inventoryStore.addItem(newProduct);
     
     // Auto-select the newly created product
     setSelectedProductIds(prev => [...prev, newProduct.id]);
@@ -356,16 +409,19 @@ function ContractDetailPageContent({ params }: { params: Promise<{ id: string }>
     // Remove product from contract
     const updatedProductIds = safeContract.productIds.filter(id => id !== productId);
     if (isChildContract) {
-      updateChildContract(contract.id, { productIds: updatedProductIds });
+      contractStore.updateChildContract(contract.id, { productIds: updatedProductIds });
     } else {
-      updateParentContract(contract.id, { productIds: updatedProductIds });
+      contractStore.updateParentContract(contract.id, { productIds: updatedProductIds });
     }
     
     // Remove contract info from inventory item
-    updateItem(productId, {
+    inventoryStore.updateItem(productId, {
       contractId: "",
       contractNumber: ""
     });
+    
+    // Reload products
+    setContractProducts(prev => prev.filter(p => p.id !== productId));
     
     toast.success("Product removed from contract");
   };
@@ -376,9 +432,7 @@ function ContractDetailPageContent({ params }: { params: Promise<{ id: string }>
       return;
     }
 
-    const { addChildContract } = useContractStore.getState();
-    const existingChildContracts = getChildContractsByParentId(contract.id);
-    const childContractNumber = `${contract.contractNumber}-CC${String(existingChildContracts.length + 1).padStart(3, "0")}`;
+    const childContractNumber = `${contract.contractNumber}-CC${String(childContracts.length + 1).padStart(3, "0")}`;
     
     const newChildContract = {
       id: `CC${Date.now()}`,
@@ -405,7 +459,11 @@ function ContractDetailPageContent({ params }: { params: Promise<{ id: string }>
       updatedAt: new Date().toISOString()
     };
 
-    addChildContract(newChildContract);
+    contractStore.addChildContract(newChildContract);
+    
+    // Reload child contracts
+    const children = contractStore.getChildContractsByParentId(contract.id);
+    setChildContracts(Array.isArray(children) ? children : []);
     
     // Reset form
     setChildContractForm({
@@ -423,6 +481,10 @@ function ContractDetailPageContent({ params }: { params: Promise<{ id: string }>
     toast.success(`Child contract ${childContractNumber} created successfully`);
     setCreateChildDialogOpen(false);
   };
+
+  const availableProducts = (inventoryStore.items || []).filter(
+    item => item.customerId === contract.customerId && !safeContract.productIds.includes(item.id)
+  );
 
   return (
     <DashboardLayout title="Contract Details">
@@ -444,7 +506,7 @@ function ContractDetailPageContent({ params }: { params: Promise<{ id: string }>
               <ContractStatusBadge status={contract.status} />
             </div>
             <p className="text-xl text-gray-700">{contract.title}</p>
-            <p className="text-gray-600 mt-2">{isChildContract ? `Customer ID: ${contract.customerId}` : parentContract?.customerName}</p>
+            <p className="text-gray-600 mt-2">{isChildContract ? `Customer ID: ${contract.customerId}` : parentContract?.customerName || contract.customerId}</p>
           </div>
           {canEdit && (
             <Button variant="outline" onClick={handleEditContract}>
@@ -479,7 +541,7 @@ function ContractDetailPageContent({ params }: { params: Promise<{ id: string }>
                 <DollarSign className="w-8 h-8 text-green-600" />
                 <div>
                   <p className="text-sm text-gray-600">Total Value</p>
-                  <p className="text-2xl font-bold text-gray-900">₹{(((isChildContract ? childContract?.value : parentContract?.totalValue) || 0) / 100000).toFixed(2)}L</p>
+                  <p className="text-2xl font-bold text-gray-900">₹{(((isChildContract ? childContract?.value : parentContract?.totalValue || contract.totalValue) || 0) / 100000).toFixed(2)}L</p>
                 </div>
               </div>
             </CardContent>
@@ -541,7 +603,7 @@ function ContractDetailPageContent({ params }: { params: Promise<{ id: string }>
                 </div>
                 <div>
                   <p className="text-sm text-gray-600">Terms & Conditions</p>
-                  <p className="text-gray-700 text-sm mt-1">{contract.terms}</p>
+                  <p className="text-gray-700 text-sm mt-1">{contract.terms || "No terms specified"}</p>
                 </div>
               </CardContent>
             </Card>
@@ -557,10 +619,12 @@ function ContractDetailPageContent({ params }: { params: Promise<{ id: string }>
                       <Plus className="w-4 h-4 mr-2" />
                       Add Product to Contract
                     </Button>
-                    <Button variant="outline" className="w-full justify-start" onClick={() => setCreateChildDialogOpen(true)}>
-                      <Plus className="w-4 h-4 mr-2" />
-                      Create Child Contract
-                    </Button>
+                    {!isChildContract && (
+                      <Button variant="outline" className="w-full justify-start" onClick={() => setCreateChildDialogOpen(true)}>
+                        <Plus className="w-4 h-4 mr-2" />
+                        Create Child Contract
+                      </Button>
+                    )}
                     <Button variant="outline" className="w-full justify-start" onClick={handleEditContract}>
                       <Edit className="w-4 h-4 mr-2" />
                       Edit Contract Details
@@ -635,84 +699,85 @@ function ContractDetailPageContent({ params }: { params: Promise<{ id: string }>
           </Card>
         </TabsContent>
 
-        <TabsContent value="child-contracts">
-          <div className="space-y-4">
-            {childContracts.length === 0 ? (
-              <Card>
-                <CardContent className="py-12 text-center">
-                  <p className="text-gray-500">No child contracts linked to this parent contract</p>
-                  {canEdit && (
-                    <Button className="mt-4" onClick={() => setCreateChildDialogOpen(true)}>
-                      <Plus className="w-4 h-4 mr-2" />
-                      Create Child Contract
-                    </Button>
-                  )}
-                </CardContent>
-              </Card>
-            ) : (
-              childContracts.map((child: any) => {
-                const childDaysRemaining = differenceInDays(new Date(child.endDate), new Date());
-                return (
-                  <Card key={child.id}>
-                    <CardHeader>
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-sm font-mono text-gray-600">{child.contractNumber}</span>
-                            <ContractStatusBadge status={child.status} />
+        {!isChildContract && (
+          <TabsContent value="child-contracts">
+            <div className="space-y-4">
+              {childContracts.length === 0 ? (
+                <Card>
+                  <CardContent className="py-12 text-center">
+                    <p className="text-gray-500">No child contracts linked to this parent contract</p>
+                    {canEdit && (
+                      <Button className="mt-4" onClick={() => setCreateChildDialogOpen(true)}>
+                        <Plus className="w-4 h-4 mr-2" />
+                        Create Child Contract
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
+              ) : (
+                childContracts.map((child: any) => {
+                  const childDaysRemaining = differenceInDays(new Date(child.endDate), new Date());
+                  return (
+                    <Card key={child.id}>
+                      <CardHeader>
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-sm font-mono text-gray-600">{child.contractNumber}</span>
+                              <ContractStatusBadge status={child.status} />
+                            </div>
+                            <CardTitle className="text-lg">{child.title}</CardTitle>
+                            <p className="text-sm text-gray-600 mt-1">{child.description}</p>
                           </div>
-                          <CardTitle className="text-lg">{child.title}</CardTitle>
-                          <p className="text-sm text-gray-600 mt-1">{child.description}</p>
                         </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                        <div>
-                          <p className="text-gray-600">Type</p>
-                          <p className="font-semibold text-gray-900">{child.type}</p>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                          <div>
+                            <p className="text-gray-600">Type</p>
+                            <p className="font-semibold text-gray-900">{child.type}</p>
+                          </div>
+                          <div>
+                            <p className="text-gray-600">Coverage</p>
+                            <p className="font-semibold text-gray-900 capitalize">{child.coverageType.replace('_', ' ')}</p>
+                          </div>
+                          <div>
+                            <p className="text-gray-600">Response Time</p>
+                            <p className="font-semibold text-gray-900">{child.responseTime}</p>
+                          </div>
+                          <div>
+                            <p className="text-gray-600">Value</p>
+                            <p className="font-semibold text-gray-900">₹{(child.value / 100000).toFixed(2)}L</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-gray-600">Coverage</p>
-                          <p className="font-semibold text-gray-900 capitalize">{child.coverageType.replace('_', ' ')}</p>
-                        </div>
-                        <div>
-                          <p className="text-gray-600">Response Time</p>
-                          <p className="font-semibold text-gray-900">{child.responseTime}</p>
-                        </div>
-                        <div>
-                          <p className="text-gray-600">Value</p>
-                          <p className="font-semibold text-gray-900">₹{(child.value / 100000).toFixed(2)}L</p>
-                        </div>
-                      </div>
-                      <div className="mt-4">
-                        <p className="text-sm text-gray-600 mb-2">Valid Period</p>
-                        <p className="text-sm font-medium text-gray-900">
-                          {format(new Date(child.startDate), "MMM d, yyyy")} - {format(new Date(child.endDate), "MMM d, yyyy")}
-                          {childDaysRemaining > 0 && <span className="text-gray-500 ml-2">({childDaysRemaining} days remaining)</span>}
-                        </p>
-                      </div>
-                      {child.coveredSerialNumbers.length > 0 && (
                         <div className="mt-4">
-                          <p className="text-sm text-gray-600 mb-2">Covered Serial Numbers</p>
-                          <div className="flex flex-wrap gap-2">
-                            {child.coveredSerialNumbers.map((serial: any) => (
-                              <span key={serial} className="px-2 py-1 bg-gray-100 rounded text-xs font-mono text-gray-700">
-                                {serial}
-                              </span>
-                            ))}
-                          </div>
+                          <p className="text-sm text-gray-600 mb-2">Valid Period</p>
+                          <p className="text-sm font-medium text-gray-900">
+                            {format(new Date(child.startDate), "MMM d, yyyy")} - {format(new Date(child.endDate), "MMM d, yyyy")}
+                            {childDaysRemaining > 0 && <span className="text-gray-500 ml-2">({childDaysRemaining} days remaining)</span>}
+                          </p>
                         </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                );
-              })
-            )}
-          </div>
-        </TabsContent>
+                        {child.coveredSerialNumbers && child.coveredSerialNumbers.length > 0 && (
+                          <div className="mt-4">
+                            <p className="text-sm text-gray-600 mb-2">Covered Serial Numbers</p>
+                            <div className="flex flex-wrap gap-2">
+                              {child.coveredSerialNumbers.map((serial: any) => (
+                                <span key={serial} className="px-2 py-1 bg-gray-100 rounded text-xs font-mono text-gray-700">
+                                  {serial}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  );
+                })
+              )}
+            </div>
+          </TabsContent>
+        )}
 
-        {/* Parent Contract Tab - only for child contracts */}
         {isChildContract && parentContract && (
           <TabsContent value="parent-contract" className="space-y-6">
             <Card>
@@ -865,7 +930,7 @@ function ContractDetailPageContent({ params }: { params: Promise<{ id: string }>
             </p>
           </div>
           <div className="space-y-4">
-            {items.filter(item => item.customerId === contract.customerId && !safeContract.productIds.includes(item.id)).length === 0 ? (
+            {availableProducts.length === 0 ? (
               <div className="text-center py-8">
                 <p className="text-gray-500">No available products for this customer</p>
                 <p className="text-sm text-gray-400 mt-2">All products are already linked to contracts</p>
@@ -880,15 +945,12 @@ function ContractDetailPageContent({ params }: { params: Promise<{ id: string }>
                           type="checkbox"
                           onChange={(e) => {
                             if (e.target.checked) {
-                              const availableIds = items
-                                .filter(item => item.customerId === contract.customerId && !safeContract.productIds.includes(item.id))
-                                .map(item => item.id);
-                              setSelectedProductIds(availableIds);
+                              setSelectedProductIds(availableProducts.map(item => item.id));
                             } else {
                               setSelectedProductIds([]);
                             }
                           }}
-                          checked={selectedProductIds.length > 0 && selectedProductIds.length === items.filter(item => item.customerId === contract.customerId && !safeContract.productIds.includes(item.id)).length}
+                          checked={selectedProductIds.length > 0 && selectedProductIds.length === availableProducts.length}
                           className="w-4 h-4"
                         />
                       </th>
@@ -900,29 +962,27 @@ function ContractDetailPageContent({ params }: { params: Promise<{ id: string }>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
-                    {items
-                      .filter(item => item.customerId === contract.customerId && !safeContract.productIds.includes(item.id))
-                      .map((item) => (
-                        <tr key={item.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => toggleProductSelection(item.id)}>
-                          <td className="px-4 py-3">
-                            <input
-                              type="checkbox"
-                              checked={selectedProductIds.includes(item.id)}
-                              onChange={() => toggleProductSelection(item.id)}
-                              onClick={(e) => e.stopPropagation()}
-                              className="w-4 h-4"
-                            />
-                          </td>
-                          <td className="px-4 py-3">
-                            <p className="font-medium text-gray-900">{item.productName}</p>
-                            <p className="text-xs text-gray-500">{item.manufacturer} - {item.model}</p>
-                          </td>
-                          <td className="px-4 py-3 font-mono text-sm text-gray-700">{item.serialNumber}</td>
-                          <td className="px-4 py-3 text-sm text-gray-600">{item.category}</td>
-                          <td className="px-4 py-3 text-sm text-gray-900">{item.quantity}</td>
-                          <td className="px-4 py-3 text-sm font-semibold text-gray-900">₹{(item.totalPrice / 100000).toFixed(2)}L</td>
-                        </tr>
-                      ))}
+                    {availableProducts.map((item) => (
+                      <tr key={item.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => toggleProductSelection(item.id)}>
+                        <td className="px-4 py-3">
+                          <input
+                            type="checkbox"
+                            checked={selectedProductIds.includes(item.id)}
+                            onChange={() => toggleProductSelection(item.id)}
+                            onClick={(e) => e.stopPropagation()}
+                            className="w-4 h-4"
+                          />
+                        </td>
+                        <td className="px-4 py-3">
+                          <p className="font-medium text-gray-900">{item.productName}</p>
+                          <p className="text-xs text-gray-500">{item.manufacturer} - {item.model}</p>
+                        </td>
+                        <td className="px-4 py-3 font-mono text-sm text-gray-700">{item.serialNumber}</td>
+                        <td className="px-4 py-3 text-sm text-gray-600">{item.category}</td>
+                        <td className="px-4 py-3 text-sm text-gray-900">{item.quantity}</td>
+                        <td className="px-4 py-3 text-sm font-semibold text-gray-900">₹{(item.totalPrice / 100000).toFixed(2)}L</td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
@@ -1073,150 +1133,6 @@ function ContractDetailPageContent({ params }: { params: Promise<{ id: string }>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateChildDialogOpen(false)}>Cancel</Button>
             <Button onClick={handleCreateChildContract}>Create Child Contract</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Create Product Dialog */}
-      <Dialog open={createProductDialogOpen} onOpenChange={setCreateProductDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Create New Product</DialogTitle>
-            <DialogDescription>
-              Add a new product to inventory for {contract.customerId}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="prod-name">Product Name *</Label>
-                <Input
-                  id="prod-name"
-                  value={newProductForm.productName}
-                  onChange={(e) => setNewProductForm({ ...newProductForm, productName: e.target.value })}
-                  placeholder="e.g., Dell PowerEdge R740"
-                />
-              </div>
-              <div>
-                <Label htmlFor="prod-serial">Serial Number *</Label>
-                <Input
-                  id="prod-serial"
-                  value={newProductForm.serialNumber}
-                  onChange={(e) => setNewProductForm({ ...newProductForm, serialNumber: e.target.value })}
-                  placeholder="e.g., SN123456789"
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="prod-manufacturer">Manufacturer</Label>
-                <Input
-                  id="prod-manufacturer"
-                  value={newProductForm.manufacturer}
-                  onChange={(e) => setNewProductForm({ ...newProductForm, manufacturer: e.target.value })}
-                  placeholder="e.g., Dell"
-                />
-              </div>
-              <div>
-                <Label htmlFor="prod-model">Model</Label>
-                <Input
-                  id="prod-model"
-                  value={newProductForm.model}
-                  onChange={(e) => setNewProductForm({ ...newProductForm, model: e.target.value })}
-                  placeholder="e.g., R740"
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="prod-category">Category</Label>
-                <Select value={newProductForm.category} onValueChange={(value) => setNewProductForm({ ...newProductForm, category: value })}>
-                  <SelectTrigger id="prod-category">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Server">Server</SelectItem>
-                    <SelectItem value="Storage">Storage</SelectItem>
-                    <SelectItem value="Network">Network</SelectItem>
-                    <SelectItem value="Desktop">Desktop</SelectItem>
-                    <SelectItem value="Laptop">Laptop</SelectItem>
-                    <SelectItem value="Printer">Printer</SelectItem>
-                    <SelectItem value="Software">Software</SelectItem>
-                    <SelectItem value="Other">Other</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="prod-location">Location</Label>
-                <Input
-                  id="prod-location"
-                  value={newProductForm.location}
-                  onChange={(e) => setNewProductForm({ ...newProductForm, location: e.target.value })}
-                  placeholder="e.g., Data Center A"
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="prod-quantity">Quantity</Label>
-                <Input
-                  id="prod-quantity"
-                  type="number"
-                  value={newProductForm.quantity}
-                  onChange={(e) => setNewProductForm({ ...newProductForm, quantity: e.target.value })}
-                  placeholder="1"
-                />
-              </div>
-              <div>
-                <Label htmlFor="prod-price">Unit Price (₹) *</Label>
-                <Input
-                  id="prod-price"
-                  type="number"
-                  value={newProductForm.unitPrice}
-                  onChange={(e) => setNewProductForm({ ...newProductForm, unitPrice: e.target.value })}
-                  placeholder="e.g., 500000"
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="prod-warranty-start">Warranty Start Date</Label>
-                <Input
-                  id="prod-warranty-start"
-                  type="date"
-                  value={newProductForm.warrantyStartDate}
-                  onChange={(e) => setNewProductForm({ ...newProductForm, warrantyStartDate: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label htmlFor="prod-warranty-end">Warranty End Date</Label>
-                <Input
-                  id="prod-warranty-end"
-                  type="date"
-                  value={newProductForm.warrantyEndDate}
-                  onChange={(e) => setNewProductForm({ ...newProductForm, warrantyEndDate: e.target.value })}
-                />
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => {
-              setNewProductForm({
-                productName: "",
-                manufacturer: "",
-                model: "",
-                serialNumber: "",
-                category: "Server",
-                quantity: "1",
-                unitPrice: "",
-                warrantyStartDate: format(new Date(), "yyyy-MM-dd"),
-                warrantyEndDate: format(addYears(new Date(), 1), "yyyy-MM-dd"),
-                location: "",
-                status: "active"
-              });
-              setCreateProductDialogOpen(false);
-            }}>Cancel</Button>
-            <Button onClick={handleCreateProduct}>Create & Add to Contract</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
