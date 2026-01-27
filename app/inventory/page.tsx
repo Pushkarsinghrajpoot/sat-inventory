@@ -33,10 +33,19 @@ import {
   FileText,
   Plus,
   X,
+  ExternalLink,
 } from "lucide-react";
 import { useAuthStore } from "@/store/auth-store";
 import { useInventoryStore } from "@/store/inventory-store";
 import { useCustomerStore } from "@/store/customer-store";
+import { useContractStore } from "@/store/contract-store";
+import { useRouter } from "next/navigation";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { getWarrantyStatus } from "@/lib/date-utils";
 import { exportInventoryToCSV, downloadChallan, downloadInvoice } from "@/lib/export-utils";
 import { format } from "date-fns";
@@ -63,9 +72,11 @@ const addItemSchema = z.object({
 type AddItemForm = z.infer<typeof addItemSchema>;
 
 export default function InventoryPage() {
+  const router = useRouter();
   const { user } = useAuthStore();
-  const { items, addItem } = useInventoryStore();
+  const { items, addItem, updateItem } = useInventoryStore();
   const { customers, getCustomerById } = useCustomerStore();
+  const { getContractById } = useContractStore();
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -332,6 +343,7 @@ export default function InventoryPage() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b bg-slate-50">
+                    <th className="text-left p-3 text-sm font-semibold">Contract Number</th>
                     <th className="text-left p-3 text-sm font-semibold">Product Name</th>
                     <th className="text-left p-3 text-sm font-semibold">Serial Number</th>
                     {user?.role === "distributor" && (
@@ -347,13 +359,42 @@ export default function InventoryPage() {
                 <tbody>
                   {paginatedItems.length === 0 ? (
                     <tr>
-                      <td colSpan={user?.role === "distributor" ? 8 : 7} className="text-center p-8 text-slate-500">
+                      <td colSpan={user?.role === "distributor" ? 9 : 8} className="text-center p-8 text-slate-500">
                         No items found
                       </td>
                     </tr>
                   ) : (
-                    paginatedItems.map((item) => (
+                    paginatedItems.map((item) => {
+                      const contract = item.contractId ? getContractById(item.contractId) : null;
+                      return (
                       <tr key={item.id} className="border-b hover:bg-slate-50">
+                        <td className="p-3">
+                          {item.contractNumber ? (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button
+                                    onClick={() => {
+                                      if (contract) {
+                                        router.push(`/contracts/${contract.id}`);
+                                      }
+                                    }}
+                                    className="text-sm font-mono text-blue-600 hover:text-blue-800 hover:underline cursor-pointer flex items-center gap-1 transition-colors"
+                                    disabled={!contract}
+                                  >
+                                    {item.contractNumber}
+                                    <ExternalLink className="h-3 w-3" />
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p className="text-xs">View Contract Details</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          ) : (
+                            <span className="text-sm text-gray-400 italic">No Contract</span>
+                          )}
+                        </td>
                         <td className="p-3 text-sm font-medium">{item.productName}</td>
                         <td className="p-3 text-sm text-slate-600">{item.serialNumber}</td>
                         {user?.role === "distributor" && (
@@ -395,7 +436,7 @@ export default function InventoryPage() {
                           </div>
                         </td>
                       </tr>
-                    ))
+                    )})
                   )}
                 </tbody>
               </table>

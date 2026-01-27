@@ -1,26 +1,46 @@
 "use client";
 
-import { use } from "react";
+import { use, useState } from "react";
 import { useContractStore } from "@/store/contract-store";
 import { useInventoryStore } from "@/store/inventory-store";
 import { ContractStatusBadge } from "@/components/contracts/contract-status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, Calendar, DollarSign, FileText, Package, Plus, Edit } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ArrowLeft, Calendar, DollarSign, FileText, Package, Plus, Edit, RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { format, differenceInDays } from "date-fns";
+import { format, differenceInDays, addYears } from "date-fns";
 import { useAuthStore } from "@/store/auth-store";
 import { hasPermission } from "@/lib/permissions";
 import { useResellerContextStore } from "@/store/reseller-context-store";
+import { toast } from "sonner";
 
 export default function ContractDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
   const { user } = useAuthStore();
   const { mode } = useResellerContextStore();
-  const { getContractById, getChildContractsByParentId } = useContractStore();
+  const { getContractById, getChildContractsByParentId, updateParentContract } = useContractStore();
   const { items } = useInventoryStore();
+  
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [addProductDialogOpen, setAddProductDialogOpen] = useState(false);
+  const [createChildDialogOpen, setCreateChildDialogOpen] = useState(false);
+  const [renewDialogOpen, setRenewDialogOpen] = useState(false);
+  
+  const [editForm, setEditForm] = useState({
+    title: "",
+    description: "",
+    totalValue: "",
+    terms: "",
+    autoRenew: true,
+    renewalReminderDays: "60"
+  });
 
   const contract = getContractById(id);
   const childContracts = contract ? getChildContractsByParentId(contract.id) : [];
@@ -44,8 +64,54 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
 
   const daysRemaining = differenceInDays(new Date(contract.endDate), new Date());
 
+  const handleEditContract = () => {
+    setEditForm({
+      title: contract.title,
+      description: contract.description,
+      totalValue: contract.totalValue.toString(),
+      terms: contract.terms,
+      autoRenew: contract.autoRenew,
+      renewalReminderDays: contract.renewalReminderDays.toString()
+    });
+    setEditDialogOpen(true);
+  };
+
+  const handleSaveEdit = () => {
+    updateParentContract(contract.id, {
+      title: editForm.title,
+      description: editForm.description,
+      totalValue: parseFloat(editForm.totalValue),
+      terms: editForm.terms,
+      autoRenew: editForm.autoRenew,
+      renewalReminderDays: parseInt(editForm.renewalReminderDays)
+    });
+    toast.success("Contract updated successfully");
+    setEditDialogOpen(false);
+  };
+
+  const handleRenewContract = () => {
+    const newEndDate = format(addYears(new Date(contract.endDate), 1), "yyyy-MM-dd");
+    updateParentContract(contract.id, {
+      endDate: newEndDate,
+      status: "active" as const
+    });
+    toast.success(`Contract renewed until ${format(new Date(newEndDate), "MMM d, yyyy")}`);
+    setRenewDialogOpen(false);
+  };
+
+  const handleAddProduct = () => {
+    toast.info("Navigate to Inventory to add products");
+    router.push("/inventory");
+  };
+
+  const handleCreateChildContract = () => {
+    toast.info("Child contract creation - Feature coming soon");
+    setCreateChildDialogOpen(false);
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="min-h-screen bg-gray-50 p-6">
+      <div className="max-w-7xl mx-auto space-y-6">
       <div>
         <Button
           variant="ghost"
@@ -66,7 +132,7 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
             <p className="text-gray-600 mt-2">{contract.customerName}</p>
           </div>
           {canEdit && (
-            <Button variant="outline">
+            <Button variant="outline" onClick={handleEditContract}>
               <Edit className="w-4 h-4 mr-2" />
               Edit Contract
             </Button>
@@ -171,21 +237,21 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
               <CardContent className="space-y-2">
                 {canEdit && (
                   <>
-                    <Button variant="outline" className="w-full justify-start">
+                    <Button variant="outline" className="w-full justify-start" onClick={handleAddProduct}>
                       <Plus className="w-4 h-4 mr-2" />
                       Add Product to Contract
                     </Button>
-                    <Button variant="outline" className="w-full justify-start">
+                    <Button variant="outline" className="w-full justify-start" onClick={() => setCreateChildDialogOpen(true)}>
                       <Plus className="w-4 h-4 mr-2" />
                       Create Child Contract
                     </Button>
-                    <Button variant="outline" className="w-full justify-start">
+                    <Button variant="outline" className="w-full justify-start" onClick={handleEditContract}>
                       <Edit className="w-4 h-4 mr-2" />
                       Edit Contract Details
                     </Button>
                     {contract.status === "active" && (
-                      <Button variant="outline" className="w-full justify-start">
-                        <FileText className="w-4 h-4 mr-2" />
+                      <Button variant="outline" className="w-full justify-start" onClick={() => setRenewDialogOpen(true)}>
+                        <RefreshCw className="w-4 h-4 mr-2" />
                         Renew Contract
                       </Button>
                     )}
@@ -247,7 +313,7 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
                 <CardContent className="py-12 text-center">
                   <p className="text-gray-500">No child contracts linked to this parent contract</p>
                   {canEdit && (
-                    <Button className="mt-4">
+                    <Button className="mt-4" onClick={() => setCreateChildDialogOpen(true)}>
                       <Plus className="w-4 h-4 mr-2" />
                       Create Child Contract
                     </Button>
@@ -317,6 +383,128 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* Edit Contract Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Edit Contract Details</DialogTitle>
+            <DialogDescription>Update the contract information below</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="edit-title">Contract Title</Label>
+              <Input
+                id="edit-title"
+                value={editForm.title}
+                onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit-description">Description</Label>
+              <Textarea
+                id="edit-description"
+                value={editForm.description}
+                onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                rows={3}
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit-value">Total Value (₹)</Label>
+              <Input
+                id="edit-value"
+                type="number"
+                value={editForm.totalValue}
+                onChange={(e) => setEditForm({ ...editForm, totalValue: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit-terms">Terms & Conditions</Label>
+              <Textarea
+                id="edit-terms"
+                value={editForm.terms}
+                onChange={(e) => setEditForm({ ...editForm, terms: e.target.value })}
+                rows={3}
+              />
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="edit-autorenew"
+                  checked={editForm.autoRenew}
+                  onChange={(e) => setEditForm({ ...editForm, autoRenew: e.target.checked })}
+                  className="w-4 h-4"
+                />
+                <Label htmlFor="edit-autorenew">Auto-renew</Label>
+              </div>
+              {editForm.autoRenew && (
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="edit-reminder">Reminder:</Label>
+                  <Input
+                    id="edit-reminder"
+                    type="number"
+                    value={editForm.renewalReminderDays}
+                    onChange={(e) => setEditForm({ ...editForm, renewalReminderDays: e.target.value })}
+                    className="w-20"
+                  />
+                  <span className="text-sm text-gray-600">days</span>
+                </div>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleSaveEdit}>Save Changes</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Renew Contract Dialog */}
+      <Dialog open={renewDialogOpen} onOpenChange={setRenewDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Renew Contract</DialogTitle>
+            <DialogDescription>
+              Renew this contract for another year?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-sm text-gray-600">Current End Date: <span className="font-semibold">{format(new Date(contract.endDate), "MMM d, yyyy")}</span></p>
+            <p className="text-sm text-gray-600 mt-2">New End Date: <span className="font-semibold text-green-600">{format(addYears(new Date(contract.endDate), 1), "MMM d, yyyy")}</span></p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRenewDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleRenewContract}>Confirm Renewal</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Child Contract Dialog */}
+      <Dialog open={createChildDialogOpen} onOpenChange={setCreateChildDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create Child Contract</DialogTitle>
+            <DialogDescription>
+              Add AMC, Support, or License contract under {contract.contractNumber}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-sm text-gray-600">This feature allows you to create child contracts such as:</p>
+            <ul className="list-disc list-inside mt-2 text-sm text-gray-600 space-y-1">
+              <li>Annual Maintenance Contract (AMC)</li>
+              <li>Extended Support Services</li>
+              <li>Software License Extensions</li>
+            </ul>
+            <p className="text-sm text-blue-600 mt-4 italic">Full implementation coming soon</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateChildDialogOpen(false)}>Close</Button>
+            <Button onClick={handleCreateChildContract}>Create</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
     </div>
   );
 }
