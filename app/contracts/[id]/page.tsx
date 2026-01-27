@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Calendar, DollarSign, FileText, Package, Plus, Edit, RefreshCw } from "lucide-react";
+import { ArrowLeft, Calendar, DollarSign, FileText, Package, Plus, Edit, RefreshCw, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { format, differenceInDays, addYears } from "date-fns";
 import { useAuthStore } from "@/store/auth-store";
@@ -27,7 +27,7 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
   const { user } = useAuthStore();
   const { mode } = useResellerContextStore();
   const { getContractById, getChildContractsByParentId, updateParentContract } = useContractStore();
-  const { items } = useInventoryStore();
+  const { items, updateItem } = useInventoryStore();
   
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [addProductDialogOpen, setAddProductDialogOpen] = useState(false);
@@ -229,6 +229,22 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
     
     toast.success("Product created and selected for contract");
     setCreateProductDialogOpen(false);
+  };
+
+  const handleRemoveProduct = (productId: string) => {
+    if (!canEdit) return;
+    
+    // Remove product from contract
+    const updatedProductIds = contract.productIds.filter(id => id !== productId);
+    updateParentContract(contract.id, { productIds: updatedProductIds });
+    
+    // Remove contract info from inventory item
+    updateItem(productId, {
+      contractId: "",
+      contractNumber: ""
+    });
+    
+    toast.success("Product removed from contract");
   };
 
   const handleCreateChildContract = () => {
@@ -454,6 +470,7 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Category</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Quantity</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Value</th>
+                        {canEdit && <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Actions</th>}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
@@ -467,6 +484,18 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
                           <td className="px-4 py-3 text-sm text-gray-600">{product.category}</td>
                           <td className="px-4 py-3 text-sm text-gray-900">{product.quantity}</td>
                           <td className="px-4 py-3 text-sm font-semibold text-gray-900">₹{(product.totalPrice / 100000).toFixed(2)}L</td>
+                          {canEdit && (
+                            <td className="px-4 py-3">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleRemoveProduct(product.id)}
+                                className="text-red-600 hover:text-red-800 hover:bg-red-50"
+                              >
+                                <X className="w-4 h-4" />
+                              </Button>
+                            </td>
+                          )}
                         </tr>
                       ))}
                     </tbody>
