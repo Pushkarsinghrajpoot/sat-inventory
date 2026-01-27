@@ -94,22 +94,47 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
     );
   }
 
+  // Additional validation for required contract properties
+  if (!contract.id || !contract.contractNumber || !contract.endDate) {
+    return (
+      <DashboardLayout title="Contract Details">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <p className="text-gray-500 text-lg">Invalid contract data</p>
+            <Button onClick={() => router.push("/contracts")} className="mt-4">
+              Back to Contracts
+            </Button>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
   const daysRemaining = differenceInDays(new Date(contract.endDate), new Date());
   
+  // Ensure contract has required properties with defaults
+  const safeContract = {
+    ...contract,
+    productIds: contract.productIds || [],
+    terms: contract.terms || "",
+    autoRenew: contract.autoRenew || false,
+    renewalReminderDays: contract.renewalReminderDays || 30
+  };
+  
   // Get contract products
-  const contractProducts = items.filter(item => contract.productIds?.includes(item.id) || false);
+  const contractProducts = items.filter(item => safeContract.productIds.includes(item.id));
   
   // Get child contracts (only for parent contracts)
   const childContracts = isChildContract ? [] : getChildContractsByParentId(contract.id);
 
   const handleEditContract = () => {
     setEditForm({
-      title: contract.title,
-      description: contract.description,
+      title: safeContract.title,
+      description: safeContract.description,
       totalValue: (isChildContract ? childContract?.value : parentContract?.totalValue)?.toString() || "0",
-      terms: contract.terms || "",
-      autoRenew: contract.autoRenew || false,
-      renewalReminderDays: contract.renewalReminderDays?.toString() || "30"
+      terms: safeContract.terms,
+      autoRenew: safeContract.autoRenew,
+      renewalReminderDays: safeContract.renewalReminderDays.toString()
     });
     setEditDialogOpen(true);
   };
@@ -168,7 +193,7 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
     const { updateItem } = useInventoryStore.getState();
     
     // Update contract productIds
-    const updatedProductIds = [...new Set([...(contract.productIds || []), ...selectedProductIds])];
+    const updatedProductIds = [...new Set([...safeContract.productIds, ...selectedProductIds])];
     if (isChildContract) {
       updateChildContract(contract.id, {
         productIds: updatedProductIds
@@ -268,7 +293,7 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
     if (!canEdit) return;
     
     // Remove product from contract
-    const updatedProductIds = (contract.productIds || []).filter(id => id !== productId);
+    const updatedProductIds = safeContract.productIds.filter(id => id !== productId);
     if (isChildContract) {
       updateChildContract(contract.id, { productIds: updatedProductIds });
     } else {
@@ -405,7 +430,7 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
                 <Package className="w-8 h-8 text-purple-600" />
                 <div>
                   <p className="text-sm text-gray-600">Products</p>
-                  <p className="text-2xl font-bold text-gray-900">{contract.productIds?.length || 0}</p>
+                  <p className="text-2xl font-bold text-gray-900">{safeContract.productIds.length}</p>
                   <p className="text-xs text-gray-500">{isChildContract ? 'Child Contract' : `${childContracts.length} child contracts`}</p>
                 </div>
               </div>
@@ -778,7 +803,7 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
             </p>
           </div>
           <div className="space-y-4">
-            {items.filter(item => item.customerId === contract.customerId && !(contract.productIds || []).includes(item.id)).length === 0 ? (
+            {items.filter(item => item.customerId === contract.customerId && !safeContract.productIds.includes(item.id)).length === 0 ? (
               <div className="text-center py-8">
                 <p className="text-gray-500">No available products for this customer</p>
                 <p className="text-sm text-gray-400 mt-2">All products are already linked to contracts</p>
@@ -794,14 +819,14 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
                           onChange={(e) => {
                             if (e.target.checked) {
                               const availableIds = items
-                                .filter(item => item.customerId === contract.customerId && !(contract.productIds || []).includes(item.id))
+                                .filter(item => item.customerId === contract.customerId && !safeContract.productIds.includes(item.id))
                                 .map(item => item.id);
                               setSelectedProductIds(availableIds);
                             } else {
                               setSelectedProductIds([]);
                             }
                           }}
-                          checked={selectedProductIds.length > 0 && selectedProductIds.length === items.filter(item => item.customerId === contract.customerId && !(contract.productIds || []).includes(item.id)).length}
+                          checked={selectedProductIds.length > 0 && selectedProductIds.length === items.filter(item => item.customerId === contract.customerId && !safeContract.productIds.includes(item.id)).length}
                           className="w-4 h-4"
                         />
                       </th>
@@ -814,7 +839,7 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
                   </thead>
                   <tbody className="divide-y divide-gray-200">
                     {items
-                      .filter(item => item.customerId === contract.customerId && !(contract.productIds || []).includes(item.id))
+                      .filter(item => item.customerId === contract.customerId && !safeContract.productIds.includes(item.id))
                       .map((item) => (
                         <tr key={item.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => toggleProductSelection(item.id)}>
                           <td className="px-4 py-3">
