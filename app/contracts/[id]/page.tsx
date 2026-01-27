@@ -97,7 +97,7 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
   const daysRemaining = differenceInDays(new Date(contract.endDate), new Date());
   
   // Get contract products
-  const contractProducts = items.filter(item => contract.productIds.includes(item.id));
+  const contractProducts = items.filter(item => contract.productIds?.includes(item.id) || false);
   
   // Get child contracts (only for parent contracts)
   const childContracts = isChildContract ? [] : getChildContractsByParentId(contract.id);
@@ -168,7 +168,7 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
     const { updateItem } = useInventoryStore.getState();
     
     // Update contract productIds
-    const updatedProductIds = [...new Set([...contract.productIds, ...selectedProductIds])];
+    const updatedProductIds = [...new Set([...(contract.productIds || []), ...selectedProductIds])];
     if (isChildContract) {
       updateChildContract(contract.id, {
         productIds: updatedProductIds
@@ -268,7 +268,7 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
     if (!canEdit) return;
     
     // Remove product from contract
-    const updatedProductIds = contract.productIds.filter(id => id !== productId);
+    const updatedProductIds = (contract.productIds || []).filter(id => id !== productId);
     if (isChildContract) {
       updateChildContract(contract.id, { productIds: updatedProductIds });
     } else {
@@ -405,7 +405,7 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
                 <Package className="w-8 h-8 text-purple-600" />
                 <div>
                   <p className="text-sm text-gray-600">Products</p>
-                  <p className="text-2xl font-bold text-gray-900">{contract.productIds.length}</p>
+                  <p className="text-2xl font-bold text-gray-900">{contract.productIds?.length || 0}</p>
                   <p className="text-xs text-gray-500">{isChildContract ? 'Child Contract' : `${childContracts.length} child contracts`}</p>
                 </div>
               </div>
@@ -670,7 +670,7 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
                   </div>
                   <div>
                     <p className="text-sm text-gray-600">Parent Products</p>
-                    <p className="font-medium text-gray-900">{parentContract.productIds.length} products</p>
+                    <p className="font-medium text-gray-900">{parentContract.productIds?.length || 0} products</p>
                   </div>
                 </div>
                 <div className="pt-4">
@@ -778,7 +778,7 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
             </p>
           </div>
           <div className="space-y-4">
-            {items.filter(item => item.customerId === contract.customerId && !contract.productIds.includes(item.id)).length === 0 ? (
+            {items.filter(item => item.customerId === contract.customerId && !(contract.productIds || []).includes(item.id)).length === 0 ? (
               <div className="text-center py-8">
                 <p className="text-gray-500">No available products for this customer</p>
                 <p className="text-sm text-gray-400 mt-2">All products are already linked to contracts</p>
@@ -794,14 +794,14 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
                           onChange={(e) => {
                             if (e.target.checked) {
                               const availableIds = items
-                                .filter(item => item.customerId === contract.customerId && !contract.productIds.includes(item.id))
+                                .filter(item => item.customerId === contract.customerId && !(contract.productIds || []).includes(item.id))
                                 .map(item => item.id);
                               setSelectedProductIds(availableIds);
                             } else {
                               setSelectedProductIds([]);
                             }
                           }}
-                          checked={selectedProductIds.length > 0 && selectedProductIds.length === items.filter(item => item.customerId === contract.customerId && !contract.productIds.includes(item.id)).length}
+                          checked={selectedProductIds.length > 0 && selectedProductIds.length === items.filter(item => item.customerId === contract.customerId && !(contract.productIds || []).includes(item.id)).length}
                           className="w-4 h-4"
                         />
                       </th>
@@ -814,7 +814,7 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
                   </thead>
                   <tbody className="divide-y divide-gray-200">
                     {items
-                      .filter(item => item.customerId === contract.customerId && !contract.productIds.includes(item.id))
+                      .filter(item => item.customerId === contract.customerId && !(contract.productIds || []).includes(item.id))
                       .map((item) => (
                         <tr key={item.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => toggleProductSelection(item.id)}>
                           <td className="px-4 py-3">
