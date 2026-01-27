@@ -76,7 +76,7 @@ export default function InventoryPage() {
   const { user } = useAuthStore();
   const { items, addItem, updateItem } = useInventoryStore();
   const { customers, getCustomerById } = useCustomerStore();
-  const { getContractById } = useContractStore();
+  const { getContractById, parentContracts } = useContractStore();
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -88,6 +88,11 @@ export default function InventoryPage() {
   const [downloadingChallan, setDownloadingChallan] = useState<string | null>(null);
   const [downloadingInvoice, setDownloadingInvoice] = useState<string | null>(null);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  // Get all contracts that contain a specific product (many-to-many relationship)
+  const getProductContracts = (productId: string) => {
+    return parentContracts.filter(contract => contract.productIds.includes(productId));
+  };
 
   const {
     register,
@@ -330,12 +335,10 @@ export default function InventoryPage() {
               <CardTitle>
                 Inventory Items ({filteredItems.length})
               </CardTitle>
-              {user?.role === "distributor" && (
-                <Button onClick={() => setAddItemOpen(true)}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Item
-                </Button>
-              )}
+              <Button onClick={() => router.push("/inventory/new")}>
+                <Plus className="h-4 w-4 mr-2" />
+                Create Product
+              </Button>
             </div>
           </CardHeader>
           <CardContent>
@@ -343,9 +346,9 @@ export default function InventoryPage() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b bg-slate-50">
-                    <th className="text-left p-3 text-sm font-semibold">Contract Number</th>
                     <th className="text-left p-3 text-sm font-semibold">Product Name</th>
                     <th className="text-left p-3 text-sm font-semibold">Serial Number</th>
+                    <th className="text-left p-3 text-sm font-semibold">Linked Contracts</th>
                     {user?.role === "distributor" && (
                       <th className="text-left p-3 text-sm font-semibold">Customer</th>
                     )}
@@ -365,38 +368,37 @@ export default function InventoryPage() {
                     </tr>
                   ) : (
                     paginatedItems.map((item) => {
-                      const contract = item.contractId ? getContractById(item.contractId) : null;
+                      const linkedContracts = getProductContracts(item.id);
                       return (
                       <tr key={item.id} className="border-b hover:bg-slate-50">
+                        <td className="p-3 text-sm font-medium">{item.productName}</td>
+                        <td className="p-3 text-sm text-slate-600 font-mono">{item.serialNumber}</td>
                         <td className="p-3">
-                          {item.contractNumber ? (
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <button
-                                    onClick={() => {
-                                      if (contract) {
-                                        router.push(`/contracts/${contract.id}`);
-                                      }
-                                    }}
-                                    className="text-sm font-mono text-blue-600 hover:text-blue-800 hover:underline cursor-pointer flex items-center gap-1 transition-colors"
-                                    disabled={!contract}
-                                  >
-                                    {item.contractNumber}
-                                    <ExternalLink className="h-3 w-3" />
-                                  </button>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p className="text-xs">View Contract Details</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
+                          {linkedContracts.length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {linkedContracts.map((contract) => (
+                                <TooltipProvider key={contract.id}>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <button
+                                        onClick={() => router.push(`/contracts/${contract.id}`)}
+                                        className="text-xs font-mono bg-blue-50 text-blue-700 px-2 py-1 rounded hover:bg-blue-100 transition-colors flex items-center gap-1"
+                                      >
+                                        {contract.contractNumber}
+                                        <ExternalLink className="h-3 w-3" />
+                                      </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <p className="text-xs">View {contract.title}</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              ))}
+                            </div>
                           ) : (
-                            <span className="text-sm text-gray-400 italic">No Contract</span>
+                            <span className="text-sm text-gray-400 italic">Not linked</span>
                           )}
                         </td>
-                        <td className="p-3 text-sm font-medium">{item.productName}</td>
-                        <td className="p-3 text-sm text-slate-600">{item.serialNumber}</td>
                         {user?.role === "distributor" && (
                           <td className="p-3 text-sm text-slate-600">
                             {getCustomerById(item.customerId)?.name}

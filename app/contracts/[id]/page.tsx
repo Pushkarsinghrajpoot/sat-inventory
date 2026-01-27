@@ -640,11 +640,10 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
               Select products from inventory to link to {contract.contractNumber}
             </DialogDescription>
           </DialogHeader>
-          <div className="flex justify-end mb-4">
-            <Button variant="outline" size="sm" onClick={() => setCreateProductDialogOpen(true)}>
-              <Plus className="w-4 h-4 mr-2" />
-              Create New Product
-            </Button>
+          <div className="flex justify-between items-center mb-4">
+            <p className="text-sm text-gray-600">
+              Don't see your product? <Button variant="link" className="p-0 h-auto" onClick={() => router.push("/inventory/new")}>Create a new product first</Button>
+            </p>
           </div>
           <div className="space-y-4">
             {items.filter(item => item.customerId === contract.customerId && !contract.productIds.includes(item.id)).length === 0 ? (
