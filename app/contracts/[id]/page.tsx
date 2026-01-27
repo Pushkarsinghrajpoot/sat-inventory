@@ -33,7 +33,22 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
   const [addProductDialogOpen, setAddProductDialogOpen] = useState(false);
   const [createChildDialogOpen, setCreateChildDialogOpen] = useState(false);
   const [renewDialogOpen, setRenewDialogOpen] = useState(false);
+  const [createProductDialogOpen, setCreateProductDialogOpen] = useState(false);
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
+
+  const [newProductForm, setNewProductForm] = useState({
+    productName: "",
+    manufacturer: "",
+    model: "",
+    serialNumber: "",
+    category: "Server",
+    quantity: "1",
+    unitPrice: "",
+    warrantyStartDate: format(new Date(), "yyyy-MM-dd"),
+    warrantyEndDate: format(addYears(new Date(), 1), "yyyy-MM-dd"),
+    location: "",
+    status: "active"
+  });
   
   const [editForm, setEditForm] = useState({
     title: "",
@@ -150,6 +165,70 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
         ? prev.filter(id => id !== productId)
         : [...prev, productId]
     );
+  };
+
+  const handleCreateProduct = () => {
+    if (!newProductForm.productName || !newProductForm.serialNumber || !newProductForm.unitPrice) {
+      toast.error("Please fill all required fields");
+      return;
+    }
+
+    const { addItem } = useInventoryStore.getState();
+    const unitPrice = parseFloat(newProductForm.unitPrice);
+    const quantity = parseInt(newProductForm.quantity) || 1;
+    
+    const newProduct = {
+      id: `PROD${Date.now()}`,
+      contractId: "",
+      contractNumber: "",
+      customerId: contract.customerId,
+      productName: newProductForm.productName,
+      serialNumber: newProductForm.serialNumber,
+      quantity: quantity,
+      unitPrice: unitPrice,
+      totalPrice: unitPrice * quantity,
+      deliveryDate: format(new Date(), "yyyy-MM-dd"),
+      warrantyStartDate: newProductForm.warrantyStartDate,
+      warrantyEndDate: newProductForm.warrantyEndDate,
+      warrantyContractId: null,
+      licenseEndDate: null,
+      licenseContractId: null,
+      serviceType: null,
+      serviceStartDate: null,
+      serviceEndDate: null,
+      serviceContractId: null,
+      category: newProductForm.category,
+      manufacturer: newProductForm.manufacturer,
+      model: newProductForm.model,
+      invoiceNumber: "",
+      challanNumber: "",
+      poNumber: "",
+      status: "delivered" as const,
+      notes: ""
+    };
+
+    addItem(newProduct);
+    
+    // Auto-select the newly created product
+    setSelectedProductIds(prev => [...prev, newProduct.id]);
+    
+    // Reset form
+    setNewProductForm({
+      productName: "",
+      manufacturer: "",
+      model: "",
+      serialNumber: "",
+      category: "Server",
+      quantity: "1",
+      unitPrice: "",
+      warrantyStartDate: format(new Date(), "yyyy-MM-dd"),
+      warrantyEndDate: format(addYears(new Date(), 1), "yyyy-MM-dd"),
+      location: "",
+      status: "active"
+    });
+    
+    toast.success("Product created and selected for contract");
+    setCreateProductDialogOpen(false);
   };
 
   const handleCreateChildContract = () => {
@@ -561,6 +640,12 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
               Select products from inventory to link to {contract.contractNumber}
             </DialogDescription>
           </DialogHeader>
+          <div className="flex justify-end mb-4">
+            <Button variant="outline" size="sm" onClick={() => setCreateProductDialogOpen(true)}>
+              <Plus className="w-4 h-4 mr-2" />
+              Create New Product
+            </Button>
+          </div>
           <div className="space-y-4">
             {items.filter(item => item.customerId === contract.customerId && !contract.productIds.includes(item.id)).length === 0 ? (
               <div className="text-center py-8">
@@ -770,6 +855,150 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateChildDialogOpen(false)}>Cancel</Button>
             <Button onClick={handleCreateChildContract}>Create Child Contract</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Product Dialog */}
+      <Dialog open={createProductDialogOpen} onOpenChange={setCreateProductDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Create New Product</DialogTitle>
+            <DialogDescription>
+              Add a new product to inventory for {contract.customerId}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="prod-name">Product Name *</Label>
+                <Input
+                  id="prod-name"
+                  value={newProductForm.productName}
+                  onChange={(e) => setNewProductForm({ ...newProductForm, productName: e.target.value })}
+                  placeholder="e.g., Dell PowerEdge R740"
+                />
+              </div>
+              <div>
+                <Label htmlFor="prod-serial">Serial Number *</Label>
+                <Input
+                  id="prod-serial"
+                  value={newProductForm.serialNumber}
+                  onChange={(e) => setNewProductForm({ ...newProductForm, serialNumber: e.target.value })}
+                  placeholder="e.g., SN123456789"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="prod-manufacturer">Manufacturer</Label>
+                <Input
+                  id="prod-manufacturer"
+                  value={newProductForm.manufacturer}
+                  onChange={(e) => setNewProductForm({ ...newProductForm, manufacturer: e.target.value })}
+                  placeholder="e.g., Dell"
+                />
+              </div>
+              <div>
+                <Label htmlFor="prod-model">Model</Label>
+                <Input
+                  id="prod-model"
+                  value={newProductForm.model}
+                  onChange={(e) => setNewProductForm({ ...newProductForm, model: e.target.value })}
+                  placeholder="e.g., R740"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="prod-category">Category</Label>
+                <Select value={newProductForm.category} onValueChange={(value) => setNewProductForm({ ...newProductForm, category: value })}>
+                  <SelectTrigger id="prod-category">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Server">Server</SelectItem>
+                    <SelectItem value="Storage">Storage</SelectItem>
+                    <SelectItem value="Network">Network</SelectItem>
+                    <SelectItem value="Desktop">Desktop</SelectItem>
+                    <SelectItem value="Laptop">Laptop</SelectItem>
+                    <SelectItem value="Printer">Printer</SelectItem>
+                    <SelectItem value="Software">Software</SelectItem>
+                    <SelectItem value="Other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="prod-location">Location</Label>
+                <Input
+                  id="prod-location"
+                  value={newProductForm.location}
+                  onChange={(e) => setNewProductForm({ ...newProductForm, location: e.target.value })}
+                  placeholder="e.g., Data Center A"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="prod-quantity">Quantity</Label>
+                <Input
+                  id="prod-quantity"
+                  type="number"
+                  value={newProductForm.quantity}
+                  onChange={(e) => setNewProductForm({ ...newProductForm, quantity: e.target.value })}
+                  placeholder="1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="prod-price">Unit Price (₹) *</Label>
+                <Input
+                  id="prod-price"
+                  type="number"
+                  value={newProductForm.unitPrice}
+                  onChange={(e) => setNewProductForm({ ...newProductForm, unitPrice: e.target.value })}
+                  placeholder="e.g., 500000"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="prod-warranty-start">Warranty Start Date</Label>
+                <Input
+                  id="prod-warranty-start"
+                  type="date"
+                  value={newProductForm.warrantyStartDate}
+                  onChange={(e) => setNewProductForm({ ...newProductForm, warrantyStartDate: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="prod-warranty-end">Warranty End Date</Label>
+                <Input
+                  id="prod-warranty-end"
+                  type="date"
+                  value={newProductForm.warrantyEndDate}
+                  onChange={(e) => setNewProductForm({ ...newProductForm, warrantyEndDate: e.target.value })}
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setNewProductForm({
+                productName: "",
+                manufacturer: "",
+                model: "",
+                serialNumber: "",
+                category: "Server",
+                quantity: "1",
+                unitPrice: "",
+                warrantyStartDate: format(new Date(), "yyyy-MM-dd"),
+                warrantyEndDate: format(addYears(new Date(), 1), "yyyy-MM-dd"),
+                location: "",
+                status: "active"
+              });
+              setCreateProductDialogOpen(false);
+            }}>Cancel</Button>
+            <Button onClick={handleCreateProduct}>Create & Add to Contract</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
