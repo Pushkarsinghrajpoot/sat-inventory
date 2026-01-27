@@ -122,7 +122,11 @@ export default function InventoryPage() {
   const filteredItems = useMemo(() => {
     let filtered = items;
 
+    // Filter by accessible customers based on role and context
     if (user?.role === "reseller") {
+      const accessibleIds = user.managedCustomerIds || [];
+      filtered = filtered.filter(item => accessibleIds.includes(item.customerId));
+    } else if (user?.role === "customer") {
       filtered = filtered.filter(item => item.customerId === user.customerId);
     } else if (customerFilter !== "all") {
       filtered = filtered.filter(item => item.customerId === customerFilter);
