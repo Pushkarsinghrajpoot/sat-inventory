@@ -109,8 +109,22 @@ function ContractDetailPageContent({ params }: { params: Promise<{ id: string }>
     );
   }
 
-  const parentContract = getContractById(id);
-  const childContract = getChildContractById(id);
+  // Get contracts with additional safety checks
+  let parentContract = null;
+  let childContract = null;
+  
+  try {
+    parentContract = getContractById(id);
+  } catch (e) {
+    console.error('Error fetching parent contract:', e);
+  }
+  
+  try {
+    childContract = getChildContractById(id);
+  } catch (e) {
+    console.error('Error fetching child contract:', e);
+  }
+  
   const contract = parentContract || childContract;
   const isChildContract = !!childContract;
   
@@ -133,7 +147,7 @@ function ContractDetailPageContent({ params }: { params: Promise<{ id: string }>
   }
 
   // Additional validation for required contract properties
-  if (!contract.id || !contract.contractNumber || !contract.endDate) {
+  if (!contract?.id || !contract?.contractNumber || !contract?.endDate) {
     return (
       <DashboardLayout title="Contract Details">
         <div className="flex items-center justify-center min-h-[400px]">
@@ -148,22 +162,31 @@ function ContractDetailPageContent({ params }: { params: Promise<{ id: string }>
     );
   }
 
+  // Defensive check for contract properties
   const daysRemaining = differenceInDays(new Date(contract.endDate), new Date());
   
   // Ensure contract has required properties with defaults
   const safeContract = {
     ...contract,
-    productIds: contract.productIds || [],
+    productIds: Array.isArray(contract.productIds) ? contract.productIds : [],
     terms: contract.terms || "",
     autoRenew: contract.autoRenew || false,
     renewalReminderDays: contract.renewalReminderDays || 30
   };
   
-  // Get contract products
-  const contractProducts = items.filter(item => safeContract.productIds.includes(item.id));
+  // Get contract products with defensive checks
+  const contractProducts = Array.isArray(items) ? items.filter(item => safeContract.productIds.includes(item.id)) : [];
   
-  // Get child contracts (only for parent contracts)
-  const childContracts = isChildContract ? [] : getChildContractsByParentId(contract.id);
+  // Get child contracts (only for parent contracts) with defensive checks
+  const childContracts = isChildContract ? [] : (() => {
+    try {
+      const contracts = getChildContractsByParentId(contract.id);
+      return Array.isArray(contracts) ? contracts : [];
+    } catch (e) {
+      console.error('Error fetching child contracts:', e);
+      return [];
+    }
+  })();
 
   const handleEditContract = () => {
     setEditForm({
@@ -696,50 +719,51 @@ function ContractDetailPageContent({ params }: { params: Promise<{ id: string }>
               <CardHeader>
                 <CardTitle>Parent Contract Information</CardTitle>
                 <CardDescription>
-                  This child contract is linked to parent contract {parentContract.contractNumber}
+                  This child contract is linked to parent contract {parentContract.contractNumber || 'Unknown'}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <p className="text-sm text-gray-600">Parent Contract Number</p>
-                    <p className="font-semibold text-gray-900">{parentContract.contractNumber}</p>
+                    <p className="font-semibold text-gray-900">{parentContract.contractNumber || 'N/A'}</p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-600">Parent Contract Title</p>
-                    <p className="font-semibold text-gray-900">{parentContract.title}</p>
+                    <p className="font-semibold text-gray-900">{parentContract.title || 'N/A'}</p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-600">Parent Contract Value</p>
-                    <p className="font-semibold text-gray-900">₹{(parentContract.totalValue / 100000).toFixed(2)}L</p>
+                    <p className="font-semibold text-gray-900">₹{((parentContract.totalValue || 0) / 100000).toFixed(2)}L</p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-600">Parent Contract Status</p>
                     <div className="mt-1">
-                      <ContractStatusBadge status={parentContract.status} />
+                      <ContractStatusBadge status={parentContract.status || 'draft'} />
                     </div>
                   </div>
                 </div>
                 <div>
                   <p className="text-sm text-gray-600">Parent Contract Description</p>
-                  <p className="text-gray-700 mt-1">{parentContract.description}</p>
+                  <p className="text-gray-700 mt-1">{parentContract.description || 'No description available'}</p>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <p className="text-sm text-gray-600">Parent Contract Period</p>
                     <p className="font-medium text-gray-900">
-                      {format(new Date(parentContract.startDate), "MMM d, yyyy")} - {format(new Date(parentContract.endDate), "MMM d, yyyy")}
+                      {parentContract.startDate ? format(new Date(parentContract.startDate), "MMM d, yyyy") : 'N/A'} - {parentContract.endDate ? format(new Date(parentContract.endDate), "MMM d, yyyy") : 'N/A'}
                     </p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-600">Parent Products</p>
-                    <p className="font-medium text-gray-900">{parentContract.productIds?.length || 0} products</p>
+                    <p className="font-medium text-gray-900">{(parentContract.productIds || []).length} products</p>
                   </div>
                 </div>
                 <div className="pt-4">
                   <Button 
                     variant="outline" 
                     onClick={() => router.push(`/contracts/${parentContract.id}`)}
+                    disabled={!parentContract.id}
                   >
                     View Parent Contract Details
                   </Button>
