@@ -19,6 +19,9 @@ import { useAuthStore } from "@/store/auth-store";
 import { useNotificationStore } from "@/store/notification-store";
 import { useInventoryStore } from "@/store/inventory-store";
 import { useTicketStore } from "@/store/ticket-store";
+import { useContractStore } from "@/store/contract-store";
+import { useResellerContextStore } from "@/store/reseller-context-store";
+import { filterByAccessibleCustomers } from "@/lib/permissions";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
@@ -33,6 +36,8 @@ export function Header({ title }: HeaderProps) {
   const { notifications, unreadCount, markAsRead } = useNotificationStore();
   const { items } = useInventoryStore();
   const { tickets } = useTicketStore();
+  const { parentContracts, childContracts } = useContractStore();
+  const { mode } = useResellerContextStore();
   const [searchQuery, setSearchQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
 
@@ -42,9 +47,25 @@ export function Header({ title }: HeaderProps) {
   };
 
   const searchResults = useMemo(() => {
-    if (!searchQuery.trim()) return { items: [], tickets: [] };
+    if (!searchQuery.trim()) return { items: [], tickets: [], contracts: [] };
     
     const query = searchQuery.toLowerCase();
+    const resellerContext = user?.role === "reseller" ? { mode } : undefined;
+    
+    // Filter contracts based on permissions
+    const accessibleParentContracts = filterByAccessibleCustomers(
+      parentContracts,
+      user,
+      resellerContext
+    );
+    
+    const accessibleChildContracts = childContracts.filter(child => {
+      const parentContract = parentContracts.find(p => p.id === child.parentContractId);
+      return parentContract && accessibleParentContracts.some(ap => ap.id === parentContract.id);
+    });
+    
+    const allContracts = [...accessibleParentContracts, ...accessibleChildContracts];
+    
     const matchedItems = items
       .filter((item: any) => 
         item.productName.toLowerCase().includes(query) ||
@@ -59,8 +80,15 @@ export function Header({ title }: HeaderProps) {
       )
       .slice(0, 5);
     
-    return { items: matchedItems, tickets: matchedTickets };
-  }, [searchQuery, items, tickets]);
+    const matchedContracts = allContracts
+      .filter((contract: any) => 
+        contract.contractNumber.toLowerCase().includes(query) ||
+        contract.title.toLowerCase().includes(query)
+      )
+      .slice(0, 3);
+    
+    return { items: matchedItems, tickets: matchedTickets, contracts: matchedContracts };
+  }, [searchQuery, items, tickets, parentContracts, childContracts, user, mode]);
 
   const userNotifications = notifications
     .filter(n => n.customerId === user?.customerId || n.customerId === null)
@@ -77,7 +105,7 @@ export function Header({ title }: HeaderProps) {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <Input
             type="search"
-            placeholder="Search products, tickets..."
+            placeholder="Search products, tickets, contracts..."
             className="pl-10"
             value={searchQuery}
             onChange={(e) => {
@@ -86,7 +114,7 @@ export function Header({ title }: HeaderProps) {
             }}
             onFocus={() => setSearchOpen(true)}
           />
-          {searchOpen && searchQuery && (searchResults.items.length > 0 || searchResults.tickets.length > 0) && (
+          {searchOpen && searchQuery && (searchResults.items.length > 0 || searchResults.tickets.length > 0 || searchResults.contracts.length > 0) && (
             <div className="absolute top-full mt-2 w-full bg-white border rounded-lg shadow-lg p-2 z-50">
               {searchResults.items.length > 0 && (
                 <div className="mb-2">
@@ -122,6 +150,25 @@ export function Header({ title }: HeaderProps) {
                     >
                       <p className="text-sm font-medium">{ticket.subject}</p>
                       <p className="text-xs text-slate-500">{ticket.id}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {searchResults.contracts.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-slate-500 px-2 py-1">Contracts</p>
+                  {searchResults.contracts.map((contract: any) => (
+                    <div
+                      key={contract.id}
+                      className="px-3 py-2 hover:bg-slate-50 rounded cursor-pointer"
+                      onClick={() => {
+                        router.push(`/contracts/${contract.id}`);
+                        setSearchQuery("");
+                        setSearchOpen(false);
+                      }}
+                    >
+                      <p className="text-sm font-medium">{contract.title}</p>
+                      <p className="text-xs text-slate-500">{contract.contractNumber}</p>
                     </div>
                   ))}
                 </div>

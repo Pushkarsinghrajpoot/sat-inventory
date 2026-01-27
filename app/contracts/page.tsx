@@ -13,16 +13,25 @@ import { useRouter } from "next/navigation";
 export default function ContractsPage() {
   const router = useRouter();
   const { user } = useAuthStore();
-  const { parentContracts } = useContractStore();
+  const { parentContracts, childContracts } = useContractStore();
   const { mode } = useResellerContextStore();
 
   const resellerContext = user?.role === "reseller" ? { mode } : undefined;
 
-  const accessibleContracts = filterByAccessibleCustomers(
+  const accessibleParentContracts = filterByAccessibleCustomers(
     parentContracts,
     user,
     resellerContext
   );
+
+  // Filter child contracts based on accessible parent contracts
+  const accessibleChildContracts = childContracts.filter(child => {
+    const parentContract = parentContracts.find(p => p.id === child.parentContractId);
+    return parentContract && accessibleParentContracts.some(ap => ap.id === parentContract.id);
+  });
+
+  // Combine both parent and child contracts for display
+  const allAccessibleContracts = [...accessibleParentContracts, ...accessibleChildContracts];
 
   const canCreate = hasPermission(
     user?.role || "customer",
@@ -31,10 +40,10 @@ export default function ContractsPage() {
   );
 
   const stats = {
-    total: accessibleContracts.length,
-    active: accessibleContracts.filter(c => c.status === "active").length,
-    expiringSoon: accessibleContracts.filter(c => c.status === "expiring_soon").length,
-    expired: accessibleContracts.filter(c => c.status === "expired").length
+    total: allAccessibleContracts.length,
+    active: allAccessibleContracts.filter((c: any) => c.status === "active").length,
+    expiringSoon: allAccessibleContracts.filter((c: any) => c.status === "expiring_soon").length,
+    expired: allAccessibleContracts.filter((c: any) => c.status === "expired").length
   };
 
   return (
@@ -76,7 +85,7 @@ export default function ContractsPage() {
       </div>
 
       <div className="bg-white border rounded-lg p-6">
-        <ContractList contracts={accessibleContracts} />
+        <ContractList contracts={allAccessibleContracts} />
       </div>
     </div>
     </DashboardLayout>

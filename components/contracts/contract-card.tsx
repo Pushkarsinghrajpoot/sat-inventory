@@ -10,15 +10,19 @@ import { useRouter } from "next/navigation";
 import { useContractStore } from "@/store/contract-store";
 
 interface ContractCardProps {
-  contract: ParentContract;
+  contract: ParentContract | ChildContract;
   onViewDetails?: (id: string) => void;
   showActions?: boolean;
 }
 
 export function ContractCard({ contract, onViewDetails, showActions = true }: ContractCardProps) {
   const router = useRouter();
-  const { getChildContractsByParentId } = useContractStore();
-  const childContracts = getChildContractsByParentId(contract.id);
+  const { getChildContractsByParentId, getContractById } = useContractStore();
+  
+  // Check if this is a child contract
+  const isChildContract = 'parentContractId' in contract;
+  const childContracts = isChildContract ? [] : getChildContractsByParentId(contract.id);
+  const parentContract = isChildContract ? getContractById(contract.parentContractId) : null;
 
   const daysRemaining = differenceInDays(new Date(contract.endDate), new Date());
 
@@ -40,7 +44,7 @@ export function ContractCard({ contract, onViewDetails, showActions = true }: Co
               <span className="text-sm font-mono text-gray-600">{contract.contractNumber}</span>
             </div>
             <h3 className="text-lg font-semibold text-gray-900">{contract.title}</h3>
-            <p className="text-sm text-gray-600 mt-1">{contract.customerName}</p>
+            <p className="text-sm text-gray-600 mt-1">{isChildContract ? `Customer ID: ${contract.customerId}` : (contract as any).customerName}</p>
           </div>
           <ContractStatusBadge status={contract.status} />
         </div>
@@ -52,7 +56,7 @@ export function ContractCard({ contract, onViewDetails, showActions = true }: Co
             <DollarSign className="w-4 h-4 text-gray-400" />
             <div>
               <p className="text-xs text-gray-500">Value</p>
-              <p className="font-semibold">₹{(contract.totalValue / 100000).toFixed(2)}L</p>
+              <p className="font-semibold">₹{(((isChildContract ? (contract as any).value : (contract as any).totalValue) || 0) / 100000).toFixed(2)}L</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -79,6 +83,19 @@ export function ContractCard({ contract, onViewDetails, showActions = true }: Co
           </div>
         </div>
 
+        {isChildContract && parentContract && (
+          <div className="border-t pt-3">
+            <div className="flex items-center gap-2 mb-2">
+              <FileSignature className="w-4 h-4 text-gray-400" />
+              <span className="text-xs font-medium text-gray-700">Parent Contract</span>
+            </div>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-gray-600">{parentContract.contractNumber}: {parentContract.title}</span>
+              <ContractStatusBadge status={parentContract.status} className="text-xs px-2 py-0.5" />
+            </div>
+          </div>
+        )}
+
         {childContracts.length > 0 && (
           <div className="border-t pt-3">
             <div className="flex items-center gap-2 mb-2">
@@ -86,7 +103,7 @@ export function ContractCard({ contract, onViewDetails, showActions = true }: Co
               <span className="text-xs font-medium text-gray-700">Child Contracts ({childContracts.length})</span>
             </div>
             <div className="space-y-1">
-              {childContracts.slice(0, 2).map((child) => (
+              {childContracts.slice(0, 2).map((child: any) => (
                 <div key={child.id} className="flex items-center justify-between text-xs">
                   <span className="text-gray-600">{child.contractNumber}: {child.type}</span>
                   <ContractStatusBadge status={child.status} className="text-xs px-2 py-0.5" />

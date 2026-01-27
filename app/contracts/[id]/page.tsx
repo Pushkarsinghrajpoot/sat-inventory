@@ -6,7 +6,7 @@ import { useContractStore } from "@/store/contract-store";
 import { useInventoryStore } from "@/store/inventory-store";
 import { ContractStatusBadge } from "@/components/contracts/contract-status-badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -26,7 +26,7 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
   const router = useRouter();
   const { user } = useAuthStore();
   const { mode } = useResellerContextStore();
-  const { getContractById, getChildContractsByParentId, updateParentContract } = useContractStore();
+  const { getContractById, getChildContractsByParentId, updateParentContract, getChildContractById, updateChildContract } = useContractStore();
   const { items, updateItem } = useInventoryStore();
   
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -71,59 +71,86 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
     coveredSerialNumbers: [] as string[]
   });
 
-  const contract = getContractById(id);
-  const childContracts = contract ? getChildContractsByParentId(contract.id) : [];
-  const contractProducts = items.filter(item => contract?.productIds.includes(item.id));
-
+  const parentContract = getContractById(id);
+  const childContract = getChildContractById(id);
+  const contract = parentContract || childContract;
+  const isChildContract = !!childContract;
+  
   const resellerContext = user?.role === "reseller" ? { mode } : undefined;
   const canEdit = hasPermission(user?.role || "customer", "contracts.edit", resellerContext);
 
   if (!contract) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center">
-          <p className="text-gray-500 text-lg">Contract not found</p>
-          <Button onClick={() => router.push("/contracts")} className="mt-4">
-            Back to Contracts
-          </Button>
+      <DashboardLayout title="Contract Details">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <p className="text-gray-500 text-lg">Contract not found</p>
+            <Button onClick={() => router.push("/contracts")} className="mt-4">
+              Back to Contracts
+            </Button>
+          </div>
         </div>
-      </div>
+      </DashboardLayout>
     );
   }
 
   const daysRemaining = differenceInDays(new Date(contract.endDate), new Date());
+  
+  // Get contract products
+  const contractProducts = items.filter(item => contract.productIds.includes(item.id));
+  
+  // Get child contracts (only for parent contracts)
+  const childContracts = isChildContract ? [] : getChildContractsByParentId(contract.id);
 
   const handleEditContract = () => {
     setEditForm({
       title: contract.title,
       description: contract.description,
-      totalValue: contract.totalValue.toString(),
-      terms: contract.terms,
-      autoRenew: contract.autoRenew,
-      renewalReminderDays: contract.renewalReminderDays.toString()
+      totalValue: (isChildContract ? childContract?.value : parentContract?.totalValue)?.toString() || "0",
+      terms: contract.terms || "",
+      autoRenew: contract.autoRenew || false,
+      renewalReminderDays: contract.renewalReminderDays?.toString() || "30"
     });
     setEditDialogOpen(true);
   };
 
   const handleSaveEdit = () => {
-    updateParentContract(contract.id, {
-      title: editForm.title,
-      description: editForm.description,
-      totalValue: parseFloat(editForm.totalValue),
-      terms: editForm.terms,
-      autoRenew: editForm.autoRenew,
-      renewalReminderDays: parseInt(editForm.renewalReminderDays)
-    });
+    if (isChildContract) {
+      updateChildContract(contract.id, {
+        title: editForm.title,
+        description: editForm.description,
+        value: parseFloat(editForm.totalValue),
+        terms: editForm.terms,
+        autoRenew: editForm.autoRenew,
+        renewalReminderDays: parseInt(editForm.renewalReminderDays)
+      });
+    } else {
+      updateParentContract(contract.id, {
+        title: editForm.title,
+        description: editForm.description,
+        totalValue: parseFloat(editForm.totalValue),
+        terms: editForm.terms,
+        autoRenew: editForm.autoRenew,
+        renewalReminderDays: parseInt(editForm.renewalReminderDays)
+      });
+    }
     toast.success("Contract updated successfully");
     setEditDialogOpen(false);
   };
 
   const handleRenewContract = () => {
     const newEndDate = format(addYears(new Date(contract.endDate), 1), "yyyy-MM-dd");
-    updateParentContract(contract.id, {
-      endDate: newEndDate,
-      status: "active" as const
-    });
+    if (isChildContract) {
+      updateChildContract(contract.id, {
+        endDate: newEndDate,
+        status: "active" as const
+      });
+    } else {
+      updateParentContract(contract.id, {
+        endDate: newEndDate,
+        status: "active" as const
+      });
+    }
     toast.success(`Contract renewed until ${format(new Date(newEndDate), "MMM d, yyyy")}`);
     setRenewDialogOpen(false);
   };
@@ -142,9 +169,15 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
     
     // Update contract productIds
     const updatedProductIds = [...new Set([...contract.productIds, ...selectedProductIds])];
-    updateParentContract(contract.id, {
-      productIds: updatedProductIds
-    });
+    if (isChildContract) {
+      updateChildContract(contract.id, {
+        productIds: updatedProductIds
+      });
+    } else {
+      updateParentContract(contract.id, {
+        productIds: updatedProductIds
+      });
+    }
 
     // Update inventory items with contract info
     selectedProductIds.forEach(productId => {
@@ -236,7 +269,11 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
     
     // Remove product from contract
     const updatedProductIds = contract.productIds.filter(id => id !== productId);
-    updateParentContract(contract.id, { productIds: updatedProductIds });
+    if (isChildContract) {
+      updateChildContract(contract.id, { productIds: updatedProductIds });
+    } else {
+      updateParentContract(contract.id, { productIds: updatedProductIds });
+    }
     
     // Remove contract info from inventory item
     updateItem(productId, {
@@ -254,7 +291,8 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
     }
 
     const { addChildContract } = useContractStore.getState();
-    const childContractNumber = `${contract.contractNumber}-CC${String(childContracts.length + 1).padStart(3, "0")}`;
+    const existingChildContracts = getChildContractsByParentId(contract.id);
+    const childContractNumber = `${contract.contractNumber}-CC${String(existingChildContracts.length + 1).padStart(3, "0")}`;
     
     const newChildContract = {
       id: `CC${Date.now()}`,
@@ -272,6 +310,10 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
       status: "active" as const,
       responseTime: childContractForm.responseTime,
       coveredSerialNumbers: childContractForm.coveredSerialNumbers,
+      productIds: [],
+      terms: "",
+      autoRenew: false,
+      renewalReminderDays: 30,
       createdBy: user?.id || "",
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -316,7 +358,7 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
               <ContractStatusBadge status={contract.status} />
             </div>
             <p className="text-xl text-gray-700">{contract.title}</p>
-            <p className="text-gray-600 mt-2">{contract.customerName}</p>
+            <p className="text-gray-600 mt-2">{isChildContract ? `Customer ID: ${contract.customerId}` : parentContract?.customerName}</p>
           </div>
           {canEdit && (
             <Button variant="outline" onClick={handleEditContract}>
@@ -351,7 +393,7 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
                 <DollarSign className="w-8 h-8 text-green-600" />
                 <div>
                   <p className="text-sm text-gray-600">Total Value</p>
-                  <p className="text-2xl font-bold text-gray-900">₹{(contract.totalValue / 100000).toFixed(2)}L</p>
+                  <p className="text-2xl font-bold text-gray-900">₹{(((isChildContract ? childContract?.value : parentContract?.totalValue) || 0) / 100000).toFixed(2)}L</p>
                 </div>
               </div>
             </CardContent>
@@ -364,7 +406,7 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
                 <div>
                   <p className="text-sm text-gray-600">Products</p>
                   <p className="text-2xl font-bold text-gray-900">{contract.productIds.length}</p>
-                  <p className="text-xs text-gray-500">{childContracts.length} child contracts</p>
+                  <p className="text-xs text-gray-500">{isChildContract ? 'Child Contract' : `${childContracts.length} child contracts`}</p>
                 </div>
               </div>
             </CardContent>
@@ -376,7 +418,8 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="products">Products ({contractProducts.length})</TabsTrigger>
-          <TabsTrigger value="child-contracts">Child Contracts ({childContracts.length})</TabsTrigger>
+          {!isChildContract && <TabsTrigger value="child-contracts">Child Contracts ({childContracts.length})</TabsTrigger>}
+          {isChildContract && <TabsTrigger value="parent-contract">Parent Contract</TabsTrigger>}
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
@@ -474,7 +517,7 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
-                      {contractProducts.map((product) => (
+                      {contractProducts.map((product: any) => (
                         <tr key={product.id} className="hover:bg-gray-50">
                           <td className="px-4 py-3">
                             <p className="font-medium text-gray-900">{product.productName}</p>
@@ -521,7 +564,7 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
                 </CardContent>
               </Card>
             ) : (
-              childContracts.map((child) => {
+              childContracts.map((child: any) => {
                 const childDaysRemaining = differenceInDays(new Date(child.endDate), new Date());
                 return (
                   <Card key={child.id}>
@@ -567,7 +610,7 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
                         <div className="mt-4">
                           <p className="text-sm text-gray-600 mb-2">Covered Serial Numbers</p>
                           <div className="flex flex-wrap gap-2">
-                            {child.coveredSerialNumbers.map((serial) => (
+                            {child.coveredSerialNumbers.map((serial: any) => (
                               <span key={serial} className="px-2 py-1 bg-gray-100 rounded text-xs font-mono text-gray-700">
                                 {serial}
                               </span>
@@ -582,6 +625,66 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
             )}
           </div>
         </TabsContent>
+
+        {/* Parent Contract Tab - only for child contracts */}
+        {isChildContract && parentContract && (
+          <TabsContent value="parent-contract" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Parent Contract Information</CardTitle>
+                <CardDescription>
+                  This child contract is linked to parent contract {parentContract.contractNumber}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm text-gray-600">Parent Contract Number</p>
+                    <p className="font-semibold text-gray-900">{parentContract.contractNumber}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Parent Contract Title</p>
+                    <p className="font-semibold text-gray-900">{parentContract.title}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Parent Contract Value</p>
+                    <p className="font-semibold text-gray-900">₹{(parentContract.totalValue / 100000).toFixed(2)}L</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Parent Contract Status</p>
+                    <div className="mt-1">
+                      <ContractStatusBadge status={parentContract.status} />
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">Parent Contract Description</p>
+                  <p className="text-gray-700 mt-1">{parentContract.description}</p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm text-gray-600">Parent Contract Period</p>
+                    <p className="font-medium text-gray-900">
+                      {format(new Date(parentContract.startDate), "MMM d, yyyy")} - {format(new Date(parentContract.endDate), "MMM d, yyyy")}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Parent Products</p>
+                    <p className="font-medium text-gray-900">{parentContract.productIds.length} products</p>
+                  </div>
+                </div>
+                <div className="pt-4">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => router.push(`/contracts/${parentContract.id}`)}
+                  >
+                    View Parent Contract Details
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
       </Tabs>
 
       {/* Edit Contract Dialog */}

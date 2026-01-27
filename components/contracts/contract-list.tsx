@@ -1,14 +1,14 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { ParentContract } from "@/lib/types";
+import { ParentContract, ChildContract } from "@/lib/types";
 import { ContractCard } from "./contract-card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search, Filter } from "lucide-react";
 
 interface ContractListProps {
-  contracts: ParentContract[];
+  contracts: (ParentContract | ChildContract)[];
   onViewDetails?: (id: string) => void;
   showActions?: boolean;
 }
@@ -18,11 +18,12 @@ export function ContractList({ contracts, onViewDetails, showActions = true }: C
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
   const filteredContracts = useMemo(() => {
-    return contracts.filter((contract) => {
+    return contracts.filter((contract: any) => {
+      const customerName = contract.customerName || `Customer ID: ${contract.customerId}`;
       const matchesSearch = 
         contract.contractNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
         contract.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        contract.customerName.toLowerCase().includes(searchTerm.toLowerCase());
+        customerName.toLowerCase().includes(searchTerm.toLowerCase());
 
       const matchesStatus = statusFilter === "all" || contract.status === statusFilter;
 

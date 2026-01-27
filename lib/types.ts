@@ -162,6 +162,10 @@ export interface ChildContract {
   coverageType: "full" | "limited" | "parts_only" | "labor_only";
   responseTime: string;
   coveredSerialNumbers: string[];
+  productIds: string[];
+  terms: string;
+  autoRenew: boolean;
+  renewalReminderDays: number;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
