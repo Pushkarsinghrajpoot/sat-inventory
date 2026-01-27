@@ -1,5 +1,6 @@
 "use client";
 
+import { DashboardLayout } from "@/components/dashboard-layout";
 import { useAuthStore } from "@/store/auth-store";
 import { useContractStore } from "@/store/contract-store";
 import { useResellerContextStore } from "@/store/reseller-context-store";
@@ -37,6 +38,7 @@ export default function ContractsPage() {
   };
 
   return (
+    <DashboardLayout title="Contracts">
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
@@ -77,5 +79,6 @@ export default function ContractsPage() {
         <ContractList contracts={accessibleContracts} />
       </div>
     </div>
+    </DashboardLayout>
   );
 }

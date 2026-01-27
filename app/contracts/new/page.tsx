@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { DashboardLayout } from "@/components/dashboard-layout";
 import { useAuthStore } from "@/store/auth-store";
 import { useContractStore } from "@/store/contract-store";
 import { useCustomerStore } from "@/store/customer-store";
@@ -78,6 +79,7 @@ export default function NewContractPage() {
   };
 
   return (
+    <DashboardLayout title="Create New Contract">
     <div className="max-w-4xl mx-auto space-y-6">
       <div>
         <Button
@@ -292,5 +294,6 @@ export default function NewContractPage() {
         </CardContent>
       </Card>
     </div>
+    </DashboardLayout>
   );
 }

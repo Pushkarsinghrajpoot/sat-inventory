@@ -1,6 +1,7 @@
 "use client";
 
 import { use, useState } from "react";
+import { DashboardLayout } from "@/components/dashboard-layout";
 import { useContractStore } from "@/store/contract-store";
 import { useInventoryStore } from "@/store/inventory-store";
 import { ContractStatusBadge } from "@/components/contracts/contract-status-badge";
@@ -40,6 +41,18 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
     terms: "",
     autoRenew: true,
     renewalReminderDays: "60"
+  });
+
+  const [childContractForm, setChildContractForm] = useState({
+    title: "",
+    description: "",
+    type: "AMC",
+    coverageType: "full",
+    value: "",
+    startDate: format(new Date(), "yyyy-MM-dd"),
+    endDate: format(addYears(new Date(), 1), "yyyy-MM-dd"),
+    responseTime: "24 hours",
+    coveredSerialNumbers: [] as string[]
   });
 
   const contract = getContractById(id);
@@ -105,13 +118,57 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
   };
 
   const handleCreateChildContract = () => {
-    toast.info("Child contract creation - Feature coming soon");
+    if (!childContractForm.title || !childContractForm.value) {
+      toast.error("Please fill all required fields");
+      return;
+    }
+
+    const { addChildContract } = useContractStore.getState();
+    const childContractNumber = `${contract.contractNumber}-CC${String(childContracts.length + 1).padStart(3, "0")}`;
+    
+    const newChildContract = {
+      id: `CC${Date.now()}`,
+      parentContractId: contract.id,
+      parentContractNumber: contract.contractNumber,
+      contractNumber: childContractNumber,
+      customerId: contract.customerId,
+      title: childContractForm.title,
+      description: childContractForm.description,
+      type: childContractForm.type as "AMC" | "Support" | "License",
+      coverageType: childContractForm.coverageType as "full" | "limited" | "parts_only" | "labor_only",
+      value: parseFloat(childContractForm.value),
+      startDate: childContractForm.startDate,
+      endDate: childContractForm.endDate,
+      status: "active" as const,
+      responseTime: childContractForm.responseTime,
+      coveredSerialNumbers: childContractForm.coveredSerialNumbers,
+      createdBy: user?.id || "",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    addChildContract(newChildContract);
+    
+    // Reset form
+    setChildContractForm({
+      title: "",
+      description: "",
+      type: "AMC",
+      coverageType: "full",
+      value: "",
+      startDate: format(new Date(), "yyyy-MM-dd"),
+      endDate: format(addYears(new Date(), 1), "yyyy-MM-dd"),
+      responseTime: "24 hours",
+      coveredSerialNumbers: []
+    });
+    
+    toast.success(`Child contract ${childContractNumber} created successfully`);
     setCreateChildDialogOpen(false);
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <DashboardLayout title="Contract Details">
+      <div className="space-y-6">
       <div>
         <Button
           variant="ghost"
@@ -482,29 +539,114 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
 
       {/* Create Child Contract Dialog */}
       <Dialog open={createChildDialogOpen} onOpenChange={setCreateChildDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Create Child Contract</DialogTitle>
             <DialogDescription>
               Add AMC, Support, or License contract under {contract.contractNumber}
             </DialogDescription>
           </DialogHeader>
-          <div className="py-4">
-            <p className="text-sm text-gray-600">This feature allows you to create child contracts such as:</p>
-            <ul className="list-disc list-inside mt-2 text-sm text-gray-600 space-y-1">
-              <li>Annual Maintenance Contract (AMC)</li>
-              <li>Extended Support Services</li>
-              <li>Software License Extensions</li>
-            </ul>
-            <p className="text-sm text-blue-600 mt-4 italic">Full implementation coming soon</p>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="child-type">Contract Type *</Label>
+              <Select value={childContractForm.type} onValueChange={(value) => setChildContractForm({ ...childContractForm, type: value })}>
+                <SelectTrigger id="child-type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="AMC">Annual Maintenance Contract (AMC)</SelectItem>
+                  <SelectItem value="Support">Extended Support Services</SelectItem>
+                  <SelectItem value="License">Software License Extension</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="child-title">Title *</Label>
+              <Input
+                id="child-title"
+                value={childContractForm.title}
+                onChange={(e) => setChildContractForm({ ...childContractForm, title: e.target.value })}
+                placeholder="e.g., 24x7 Premium Support"
+              />
+            </div>
+            <div>
+              <Label htmlFor="child-description">Description</Label>
+              <Textarea
+                id="child-description"
+                value={childContractForm.description}
+                onChange={(e) => setChildContractForm({ ...childContractForm, description: e.target.value })}
+                placeholder="Brief description of coverage"
+                rows={2}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="child-coverage">Coverage Type</Label>
+                <Select value={childContractForm.coverageType} onValueChange={(value) => setChildContractForm({ ...childContractForm, coverageType: value })}>
+                  <SelectTrigger id="child-coverage">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="full">Full Coverage</SelectItem>
+                    <SelectItem value="limited">Limited Coverage</SelectItem>
+                    <SelectItem value="parts_only">Parts Only</SelectItem>
+                    <SelectItem value="labor_only">Labor Only</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="child-response">Response Time</Label>
+                <Select value={childContractForm.responseTime} onValueChange={(value) => setChildContractForm({ ...childContractForm, responseTime: value })}>
+                  <SelectTrigger id="child-response">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="4 hours">4 hours</SelectItem>
+                    <SelectItem value="8 hours">8 hours</SelectItem>
+                    <SelectItem value="24 hours">24 hours</SelectItem>
+                    <SelectItem value="48 hours">48 hours</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="child-value">Contract Value (₹) *</Label>
+              <Input
+                id="child-value"
+                type="number"
+                value={childContractForm.value}
+                onChange={(e) => setChildContractForm({ ...childContractForm, value: e.target.value })}
+                placeholder="e.g., 500000"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="child-start">Start Date</Label>
+                <Input
+                  id="child-start"
+                  type="date"
+                  value={childContractForm.startDate}
+                  onChange={(e) => setChildContractForm({ ...childContractForm, startDate: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="child-end">End Date</Label>
+                <Input
+                  id="child-end"
+                  type="date"
+                  value={childContractForm.endDate}
+                  onChange={(e) => setChildContractForm({ ...childContractForm, endDate: e.target.value })}
+                />
+              </div>
+            </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateChildDialogOpen(false)}>Close</Button>
-            <Button onClick={handleCreateChildContract}>Create</Button>
+            <Button variant="outline" onClick={() => setCreateChildDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleCreateChildContract}>Create Child Contract</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
-    </div>
+      </div>
+    </DashboardLayout>
   );
 }
