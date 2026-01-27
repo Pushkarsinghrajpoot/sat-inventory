@@ -33,6 +33,7 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
   const [addProductDialogOpen, setAddProductDialogOpen] = useState(false);
   const [createChildDialogOpen, setCreateChildDialogOpen] = useState(false);
   const [renewDialogOpen, setRenewDialogOpen] = useState(false);
+  const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
   
   const [editForm, setEditForm] = useState({
     title: "",
@@ -113,8 +114,42 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
   };
 
   const handleAddProduct = () => {
-    toast.info("Navigate to Inventory to add products");
-    router.push("/inventory");
+    setAddProductDialogOpen(true);
+  };
+
+  const handleSaveProducts = () => {
+    if (selectedProductIds.length === 0) {
+      toast.error("Please select at least one product");
+      return;
+    }
+
+    const { updateItem } = useInventoryStore.getState();
+    
+    // Update contract productIds
+    const updatedProductIds = [...new Set([...contract.productIds, ...selectedProductIds])];
+    updateParentContract(contract.id, {
+      productIds: updatedProductIds
+    });
+
+    // Update inventory items with contract info
+    selectedProductIds.forEach(productId => {
+      updateItem(productId, {
+        contractId: contract.id,
+        contractNumber: contract.contractNumber
+      });
+    });
+
+    toast.success(`${selectedProductIds.length} product(s) added to contract`);
+    setSelectedProductIds([]);
+    setAddProductDialogOpen(false);
+  };
+
+  const toggleProductSelection = (productId: string) => {
+    setSelectedProductIds(prev => 
+      prev.includes(productId) 
+        ? prev.filter(id => id !== productId)
+        : [...prev, productId]
+    );
   };
 
   const handleCreateChildContract = () => {
@@ -294,7 +329,7 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
               <CardContent className="space-y-2">
                 {canEdit && (
                   <>
-                    <Button variant="outline" className="w-full justify-start" onClick={handleAddProduct}>
+                    <Button variant="outline" className="w-full justify-start" onClick={() => setAddProductDialogOpen(true)}>
                       <Plus className="w-4 h-4 mr-2" />
                       Add Product to Contract
                     </Button>
@@ -513,6 +548,98 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditDialogOpen(false)}>Cancel</Button>
             <Button onClick={handleSaveEdit}>Save Changes</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Product Dialog */}
+      <Dialog open={addProductDialogOpen} onOpenChange={setAddProductDialogOpen}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Add Products to Contract</DialogTitle>
+            <DialogDescription>
+              Select products from inventory to link to {contract.contractNumber}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {items.filter(item => item.customerId === contract.customerId && !contract.productIds.includes(item.id)).length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-gray-500">No available products for this customer</p>
+                <p className="text-sm text-gray-400 mt-2">All products are already linked to contracts</p>
+              </div>
+            ) : (
+              <div className="border rounded-lg overflow-hidden">
+                <table className="w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">
+                        <input
+                          type="checkbox"
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              const availableIds = items
+                                .filter(item => item.customerId === contract.customerId && !contract.productIds.includes(item.id))
+                                .map(item => item.id);
+                              setSelectedProductIds(availableIds);
+                            } else {
+                              setSelectedProductIds([]);
+                            }
+                          }}
+                          checked={selectedProductIds.length > 0 && selectedProductIds.length === items.filter(item => item.customerId === contract.customerId && !contract.productIds.includes(item.id)).length}
+                          className="w-4 h-4"
+                        />
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Product</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Serial Number</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Category</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Quantity</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase">Value</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {items
+                      .filter(item => item.customerId === contract.customerId && !contract.productIds.includes(item.id))
+                      .map((item) => (
+                        <tr key={item.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => toggleProductSelection(item.id)}>
+                          <td className="px-4 py-3">
+                            <input
+                              type="checkbox"
+                              checked={selectedProductIds.includes(item.id)}
+                              onChange={() => toggleProductSelection(item.id)}
+                              onClick={(e) => e.stopPropagation()}
+                              className="w-4 h-4"
+                            />
+                          </td>
+                          <td className="px-4 py-3">
+                            <p className="font-medium text-gray-900">{item.productName}</p>
+                            <p className="text-xs text-gray-500">{item.manufacturer} - {item.model}</p>
+                          </td>
+                          <td className="px-4 py-3 font-mono text-sm text-gray-700">{item.serialNumber}</td>
+                          <td className="px-4 py-3 text-sm text-gray-600">{item.category}</td>
+                          <td className="px-4 py-3 text-sm text-gray-900">{item.quantity}</td>
+                          <td className="px-4 py-3 text-sm font-semibold text-gray-900">₹{(item.totalPrice / 100000).toFixed(2)}L</td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {selectedProductIds.length > 0 && (
+              <div className="bg-blue-50 border border-blue-200 rounded p-3">
+                <p className="text-sm text-blue-800 font-medium">
+                  {selectedProductIds.length} product(s) selected
+                </p>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setSelectedProductIds([]);
+              setAddProductDialogOpen(false);
+            }}>Cancel</Button>
+            <Button onClick={handleSaveProducts} disabled={selectedProductIds.length === 0}>
+              Add {selectedProductIds.length > 0 ? `${selectedProductIds.length} ` : ''}Product(s)
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
