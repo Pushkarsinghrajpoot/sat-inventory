@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useState, useEffect } from "react";
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { useContractStore } from "@/store/contract-store";
 import { useInventoryStore } from "@/store/inventory-store";
@@ -20,10 +20,14 @@ import { useAuthStore } from "@/store/auth-store";
 import { hasPermission } from "@/lib/permissions";
 import { useResellerContextStore } from "@/store/reseller-context-store";
 import { toast } from "sonner";
+import ErrorBoundary from "@/components/error-boundary";
 
-export default function ContractDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+function ContractDetailPageContent({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  
+  const { id } = use(params);
   const { user } = useAuthStore();
   const { mode } = useResellerContextStore();
   const { getContractById, getChildContractsByParentId, updateParentContract, getChildContractById, updateChildContract } = useContractStore();
@@ -49,6 +53,11 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
     location: "",
     status: "active"
   });
+
+  // Handle loading state
+  useEffect(() => {
+    setIsLoading(false);
+  }, []);
   
   const [editForm, setEditForm] = useState({
     title: "",
@@ -70,6 +79,35 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
     responseTime: "24 hours",
     coveredSerialNumbers: [] as string[]
   });
+
+  // Show loading state
+  if (isLoading) {
+    return (
+      <DashboardLayout title="Contract Details">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <p className="text-gray-500 text-lg">Loading contract...</p>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <DashboardLayout title="Contract Details">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <p className="text-red-500 text-lg">Error: {error}</p>
+            <Button onClick={() => router.push("/contracts")} className="mt-4">
+              Back to Contracts
+            </Button>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   const parentContract = getContractById(id);
   const childContract = getChildContractById(id);
@@ -1160,5 +1198,13 @@ export default function ContractDetailPage({ params }: { params: Promise<{ id: s
       </Dialog>
       </div>
     </DashboardLayout>
+  );
+}
+
+export default function ContractDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  return (
+    <ErrorBoundary>
+      <ContractDetailPageContent params={params} />
+    </ErrorBoundary>
   );
 }
