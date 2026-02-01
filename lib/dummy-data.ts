@@ -313,7 +313,7 @@ export const dummyTickets: Ticket[] = [
 ];
 
 export const dummyNotifications = [
-  // No notifications for HHA yet
+  // No notifications for HHA yet - empty array
 ];
 
 export const loginCredentials = {
