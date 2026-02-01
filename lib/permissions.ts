@@ -73,7 +73,15 @@ export const getAccessibleCustomerIds = (
   
   switch (user.role) {
     case "distributor":
-      return dummyCustomers.map(c => c.id);
+      // For distributors, find customers that belong to them
+      // Check if customer's managedBy matches the user's ID or company name
+      return dummyCustomers
+        .filter(customer => 
+          customer.managedBy === user.id || 
+          customer.managedBy === user.companyName ||
+          customer.name === user.companyName
+        )
+        .map(c => c.id);
       
     case "reseller":
       if (resellerContext?.mode === "as_distributor") {
